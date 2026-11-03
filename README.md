@@ -12,7 +12,7 @@
 
 [下载](https://github.com/wang01116/MiniDock/releases/latest) · [功能特性](#-功能特性) · [快速上手](#-快速上手) · [配置说明](#-配置说明)
 
-<img width="50%" alt="MiniDock 通用配置" src="assets/image1.jpg">
+<img width="80%" alt="MiniDock 通用配置" src="assets/image1.jpg">
 </div>
 
 
