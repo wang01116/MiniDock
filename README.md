@@ -9,8 +9,10 @@
 纯 Win32 + GDI+ 实现 · 单文件 C 源码 · 免安装 · 便携
 
 ![Windows](https://img.shields.io/badge/platform-Windows%2010%2F11-blue?logo=windows) ![Language](https://img.shields.io/badge/language-C-blue) ![x64](https://img.shields.io/badge/arch-x64-green) ![Size](https://img.shields.io/badge/size-%7E230%20KB-lightgrey)
-
+<img width="50%" alt="MiniDock 通用配置" src="assets/image1.jpg">
 </div>
+
+
 
 ## ✨ 简介
 
