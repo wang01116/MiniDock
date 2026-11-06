@@ -9,7 +9,7 @@
 <meta property="og:description" content="纯 Win32 手写渲染，Dock 与顶部状态栏同属一个进程。单文件约 400KB，免安装、开源免费。">
 <meta property="og:type" content="website">
 <meta name="theme-color" content="#fafbfc">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%234f6bff'/%3E%3Ccircle cx='21' cy='40' r='6' fill='%23fff'/%3E%3Ccircle cx='33' cy='40' r='6' fill='%23ffffff' opacity='.78'/%3E%3Ccircle cx='45' cy='40' r='6' fill='%23ffffff' opacity='.56'/%3E%3Crect x='16' y='22' width='32' height='4' rx='2' fill='%23fff' opacity='.9'/%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="assets/logo-128.png">
 <style>
 /* ============================================================
    MiniDock 官网样式
@@ -87,7 +87,7 @@ img, svg { display: block; }
 }
 .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 62px; gap: 18px; }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 16px; letter-spacing: -.01em; flex: none; }
-.logo-mark { width: 32px; height: 32px; border-radius: 9px; flex: none; }
+.logo-mark { width: 32px; height: 32px; border-radius: 9px; flex: none; object-fit: contain; }
 .logo-mark.sm { width: 26px; height: 26px; border-radius: 7px; }
 .nav-links { display: flex; align-items: center; gap: 2px; }
 .nav-links a { padding: 7px 11px; border-radius: 8px; font-size: 14px; color: var(--text-2); transition: .16s; white-space: nowrap; }
@@ -405,14 +405,7 @@ footer { border-top: 1px solid var(--line); padding: 30px 0; margin-top: 26px; }
 <nav class="nav">
   <div class="container nav-inner">
     <a class="brand" href="#top">
-      <svg class="logo-mark" viewBox="0 0 64 64" aria-hidden="true">
-        <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5b7bff"/><stop offset="1" stop-color="#7a5cff"/></linearGradient></defs>
-        <rect width="64" height="64" rx="15" fill="url(#lg)"/>
-        <rect x="16" y="21" width="32" height="4.5" rx="2.25" fill="#fff" opacity=".92"/>
-        <circle cx="21" cy="41" r="6" fill="#fff"/>
-        <circle cx="33" cy="41" r="6" fill="#fff" opacity=".78"/>
-        <circle cx="45" cy="41" r="6" fill="#fff" opacity=".56"/>
-      </svg>
+      <img class="logo-mark" src="assets/logo-128.png" alt="MiniDock" width="32" height="32">
       <span>MiniDock</span>
     </a>
     <div class="nav-links" id="navLinks">
@@ -1044,13 +1037,7 @@ gcc -Os -fno-ident -mwindows -s -static-libgcc ^
 <footer>
   <div class="container foot">
     <a class="foot-brand" href="#top">
-      <svg class="logo-mark sm" viewBox="0 0 64 64" aria-hidden="true">
-        <rect width="64" height="64" rx="15" fill="url(#lg)"/>
-        <rect x="16" y="21" width="32" height="4.5" rx="2.25" fill="#fff" opacity=".92"/>
-        <circle cx="21" cy="41" r="6" fill="#fff"/>
-        <circle cx="33" cy="41" r="6" fill="#fff" opacity=".78"/>
-        <circle cx="45" cy="41" r="6" fill="#fff" opacity=".56"/>
-      </svg>
+      <img class="logo-mark sm" src="assets/logo-128.png" alt="MiniDock" width="26" height="26">
       <span>MiniDock</span>
     </a>
     <div class="foot-links">
