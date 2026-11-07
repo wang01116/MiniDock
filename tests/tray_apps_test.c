@@ -8,8 +8,19 @@
 static HWND fixtureForeground;
 static HWND TestGetForegroundWindow(void) { return fixtureForeground; }
 static BOOL TestSetForegroundWindow(HWND hwnd) { fixtureForeground = hwnd; return TRUE; }
+static SHORT fixtureShiftState;
+static SHORT TestGetKeyState(int key) { return key == VK_SHIFT ? fixtureShiftState : GetKeyState(key); }
+static int launchRequests;
+static BOOL TestQueueUserWorkItem(LPTHREAD_START_ROUTINE callback, PVOID context, ULONG flags) {
+    (void)callback; (void)flags;
+    launchRequests++;
+    HeapFree(GetProcessHeap(), 0, context);
+    return TRUE;
+}
 #define GetForegroundWindow TestGetForegroundWindow
 #define SetForegroundWindow TestSetForegroundWindow
+#define GetKeyState TestGetKeyState
+#define QueueUserWorkItem TestQueueUserWorkItem
 #include "../MiniDock-source/minidock.c"
 #include <stdlib.h>
 
@@ -35,6 +46,17 @@ static int CountType(int type) {
 static void ClearItems(void) {
     for (int i = 0; i < nItems; i++) FreeItem(&items[i]);
     nItems = 0;
+}
+/* Dispatch both mouse messages through the production Dock procedure. */
+static void ClickItem(int index, WPARAM modifiers) {
+    M.g = 0; M.Z = 48; barTop = 0; LH = 100; gHideCur = 0;
+    for (int i = 0; i < nItems; i++) {
+        slotL[i] = 10 + i * 60; slotR[i] = slotL[i] + 48; items[i].cur = 48;
+    }
+    LPARAM point = MAKELPARAM((int)slotL[index] + 24, 50);
+    DockProc(g_hwnd, WM_LBUTTONDOWN, modifiers | MK_LBUTTON, point);
+    DockProc(g_hwnd, WM_LBUTTONUP, modifiers, point);
+    DrainFixtureMessages();
 }
 int main(int argc, char **argv) {
     WNDCLASSW wc = {0};
@@ -204,6 +226,72 @@ int main(int argc, char **argv) {
     LoadTrayApps();
     CHECK(g_ntrayApps == 0, "negative config count is clamped");
     DeleteFileW(g_ini);
+    HWND ordinary = CreateWindowExW(WS_EX_NOACTIVATE, testClass, L"Ordinary running app fixture", WS_OVERLAPPEDWINDOW,
+                                    testWorkArea.left + 30, testWorkArea.top + 30, 600, 500, NULL, NULL, g_inst, NULL);
+    ShowWindow(ordinary, SW_SHOWNOACTIVATE);
+    DrainFixtureMessages();
+    CHECK(IsAppWindow(ordinary), "ordinary fixture is accepted by the normal app-window filter");
+    Item ordinaryItem;
+    FillItem(&ordinaryItem, T_FILE, 0, L"Ordinary fixture", exe, NULL);
+    ordinaryItem.tdir[0] = 0;
+    ordinaryItem.running = TRUE;
+    InsertItemStruct(0, &ordinaryItem, TRUE);
+    SetForegroundWindow(ordinary);
+    LaunchItem(0, FALSE);
+    DrainFixtureMessages();
+    CHECK(IsIconic(ordinary), "ordinary runtime app minimizes through LaunchItem");
+    LaunchItem(0, FALSE);
+    DrainFixtureMessages();
+    CHECK(!IsIconic(ordinary), "ordinary runtime app restores through LaunchItem");
+    HWND clickHost = TestWindow(L"Dock click fixture", 300, 100);
+    g_hwnd = clickHost;
+    Item fixedItem;
+    FillItem(&fixedItem, T_FILE, 0, L"Pinned fixture", exe, NULL);
+    fixedItem.tdir[0] = 0; fixedItem.running = TRUE;
+    InsertItemStruct(nItems, &fixedItem, FALSE);
+    HWND document = TestWindow(L"Document click fixture", 600, 500);
+    Item windowItem = {0}; windowItem.type = T_WIN; windowItem.hwnd = document;
+    lstrcpyW(windowItem.name, L"Document fixture");
+    InsertItemStruct(nItems, &windowItem, TRUE);
+    HWND trayWindow = TestWindow(L"Tray click fixture", 600, 500);
+    a = &g_trayApps[0];
+    lstrcpyW(a->exe, exe); lstrcpyW(a->cls, testClass);
+    lstrcpyW(a->title, L"Tray click fixture"); lstrcpyW(a->name, L"Tray fixture");
+    a->pid = GetCurrentProcessId(); a->hwnd = trayWindow;
+    a->process = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, a->pid);
+    g_ntrayApps = 1;
+    SyncTrayApps();
+    CHECK(CountType(T_FILE) == 2 && CountType(T_WIN) == 1 && CountType(T_TRAY) == 1, "mixed fixture contains pinned, ordinary runtime, document and tray icons");
+    ClickItem(nItems - 1, 0);
+    CHECK(IsWindowVisible(trayWindow), "tray mouse click reveals the hidden bound window");
+    fixtureShiftState = (SHORT)0x8000; /* stale thread state; neither mouse message carries Shift */
+    HWND targets[] = {ordinary, ordinary, document, trayWindow};
+    int indices[] = {0, 1, 2, nItems - 1};
+    for (int i = 0; i < 4; i++) {
+        ShowWindow(targets[i], SW_SHOWNOACTIVATE);
+        fixtureForeground = NULL;
+        ClickItem(indices[i], 0);
+        CHECK(fixtureForeground == targets[i] && !IsIconic(targets[i]), "mixed mouse click brings a background window forward");
+        ClickItem(indices[i], 0);
+        CHECK(IsIconic(targets[i]), "mixed repeated mouse click minimizes the foreground window");
+        ClickItem(indices[i], 0);
+        CHECK(!IsIconic(targets[i]), "mixed mouse click restores a minimized window");
+    }
+    CHECK(launchRequests == 0, "ordinary clicks never relaunch despite stale queued Shift state");
+    fixtureShiftState = 0; /* opposite mismatch: mouse message carries an actual Shift click */
+    ClickItem(0, MK_SHIFT);
+    CHECK(launchRequests == 1 && !IsIconic(ordinary), "explicit Shift click still requests a new launch");
+    cfg.clickToggle = 0;
+    fixtureForeground = ordinary;
+    ClickItem(0, 0);
+    CHECK(!IsIconic(ordinary) && launchRequests == 1, "ordinary mouse click honors disabled toggle without relaunching");
+    fixtureForeground = trayWindow;
+    ClickItem(nItems - 1, 0);
+    CHECK(!IsIconic(trayWindow), "tray mouse click honors disabled toggle");
+    ClearTrayApps();
+    DestroyWindow(trayWindow); DestroyWindow(document); DestroyWindow(clickHost); g_hwnd = NULL;
+    DestroyWindow(ordinary);
+    ClearItems();
     printf("PASS %d checks\n", checks);
     return 0;
 }

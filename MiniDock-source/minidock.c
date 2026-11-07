@@ -13073,7 +13073,7 @@ static LRESULT CALLBACK DockProc(HWND h, UINT m, WPARAM w, LPARAM l) {
                name, so launch that item as long as it is still the same one. */
             (void)u; (void)v;
             if (pi < nItems && Fnv(items[pi].path) == pressKey && !lstrcmpW(items[pi].name, pressName))
-                { ClosePreview(); LaunchItem(pi, GetKeyState(VK_SHIFT) < 0); }
+                { ClosePreview(); LaunchItem(pi, (w & MK_SHIFT) != 0); } /* use this click's modifiers, not stale keyboard-queue state */
         } else if (pw >= 0) {   /* a widget: clock -> calendar, bell -> notification list */
             float u, v;
             ToLogical((float)GET_X_LPARAM(l), (float)GET_Y_LPARAM(l), &u, &v);
