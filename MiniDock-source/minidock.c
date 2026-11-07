@@ -147,7 +147,7 @@ static const GUID MY_IID_IImageList = {0x46EB5926,0x582E,0x4017,{0x9F,0xDF,0xE8,
 #define CLS_BACK L"MiniDockBackdrop"
 #define T_NOTEICON 9
 
-enum { T_FILE = 0, T_FOLDER = 1, T_URL = 2, T_SEP = 3, T_GROUP = 4, T_TRASH = 5, T_NOTE = 6, T_WIN = 7 };   /* T_WIN: one open document window (separate display) */
+enum { T_FILE = 0, T_FOLDER = 1, T_URL = 2, T_SEP = 3, T_GROUP = 4, T_TRASH = 5, T_NOTE = 6, T_WIN = 7, T_TRAY = 8 };
 enum { E_BOTTOM = 0, E_TOP = 1, E_LEFT = 2, E_RIGHT = 3 };
 
 typedef struct Item {
@@ -204,6 +204,16 @@ typedef struct {
 } Cfg;
 
 static Cfg cfg;
+#define MAXTRAYAPPS 16
+#define TRAY_SEP 10
+typedef struct {
+    WCHAR exe[MAX_PATH], cls[128], title[256], name[128];
+    HWND hwnd;
+    DWORD pid;
+    HANDLE process;
+} TrayApp;
+static TrayApp g_trayApps[MAXTRAYAPPS];
+static int g_ntrayApps;
 static float PopBlurOp(void);
 static Item items[MAXI];
 static int nItems;
@@ -341,6 +351,7 @@ static void ShowGroup(int idx);
 static void ShowFan(int idx);
 static void ShowNote(void);
 static void ToggleWindowItem(int i);
+static void ToggleWindowIdx(HWND w, int idx);
 static void ShowLaunchpad(void);
 static void ShowCalendar(void);
 static void ShowNotifyList(void);
@@ -373,6 +384,9 @@ static LRESULT CALLBACK DockProc(HWND, UINT, WPARAM, LPARAM);
 static void SetPinMenu(BOOL on);
 static void StartUpdateCheck(BOOL autoMode);
 static void PinPath(const WCHAR *path);
+static void LoadTrayApps(void);
+static void ClearTrayApps(void);
+static BOOL SyncTrayApps(void);
 static WCHAR g_updText[220], g_updUrl[320];
 static BOOL g_updNew, g_updAuto;
 
@@ -703,6 +717,7 @@ static void UpdateTheme(void) {
 /* ---------------- config ---------------- */
 static void LoadConfig(void) {
     DefaultCfg();
+    LoadTrayApps();
     if ((int)GetPrivateProfileIntW(L"Settings", L"BgMode", -1, g_ini) < 0) cfg.bgMode = GetPrivateProfileIntW(L"Settings", L"Frost", 1, g_ini) ? 2 : 0;
     for (int i = 0; i < NTAB; i++) *g_tab[i].p = (int)GetPrivateProfileIntW(L"Settings", g_tab[i].k, *g_tab[i].p, g_ini);
     if (cfg.bgMode < 0 || cfg.bgMode > 2) cfg.bgMode = 2;
@@ -1877,6 +1892,15 @@ static void SaveNow(void) {
     }
     { WCHAR t[48]; wsprintfW(t, L"Count=%d\r\n", si); WCat(&w, t); }
     WCat(&w, gr.b);
+    WCat(&w, L"[TrayApps]\r\n");
+    { WCHAR t[32]; wsprintfW(t, L"Count=%d\r\n", g_ntrayApps); WCat(&w, t); }
+    for (int i = 0; i < g_ntrayApps; i++) {
+        WCHAR k[32];
+        wsprintfW(k, L"Path%d=", i); WCat(&w, k); WCat(&w, g_trayApps[i].exe); WCat(&w, L"\r\n");
+        wsprintfW(k, L"Class%d=", i); WCat(&w, k); WCat(&w, g_trayApps[i].cls); WCat(&w, L"\r\n");
+        wsprintfW(k, L"Title%d=", i); WCat(&w, k); WCat(&w, g_trayApps[i].title); WCat(&w, L"\r\n");
+        wsprintfW(k, L"Name%d=", i); WCat(&w, k); WCat(&w, g_trayApps[i].name); WCat(&w, L"\r\n");
+    }
     WCHAR tmp[MAX_PATH + 8];
     lstrcpyW(tmp, g_ini);
     lstrcatW(tmp, L".tmp");
@@ -2090,6 +2114,10 @@ static void ImportConfig(HWND parent) {
     HeapFree(GetProcessHeap(), 0, b);
     /* merge only the parts the file actually contains */
     CopySection(L"Settings", imp, g_ini);
+    if ((int)GetPrivateProfileIntW(L"TrayApps", L"Count", -1, imp) >= 0) {
+        WritePrivateProfileStringW(L"TrayApps", NULL, NULL, g_ini);
+        CopySection(L"TrayApps", imp, g_ini);
+    }
     if ((int)GetPrivateProfileIntW(L"Items", L"Count", -1, imp) >= 0) {
         WritePrivateProfileStringW(L"Items", NULL, NULL, g_ini);
         WritePrivateProfileStringW(L"Groups", NULL, NULL, g_ini);
@@ -2482,6 +2510,112 @@ static BOOL IsAppWindow(HWND h) {
     return TRUE;
 }
 
+/* A user-selected main window stays addressable after its app hides it in the tray.
+   The process handle guards against PID reuse. Class and title distinguish hidden
+   login/helper windows when the dock starts again or the main HWND is recreated. */
+static void ClearTrayApps(void) {
+    for (int i = 0; i < g_ntrayApps; i++) if (g_trayApps[i].process) CloseHandle(g_trayApps[i].process);
+    ZeroMemory(g_trayApps, sizeof g_trayApps);
+    g_ntrayApps = 0;
+}
+
+static int TrayAppIndex(const WCHAR *exe) {
+    for (int i = 0; i < g_ntrayApps; i++) if (!lstrcmpiW(g_trayApps[i].exe, exe)) return i;
+    return -1;
+}
+
+static void LoadTrayApps(void) {
+    ClearTrayApps();
+    int count = (int)GetPrivateProfileIntW(L"TrayApps", L"Count", 0, g_ini);
+    if (count < 0) count = 0;
+    if (count > MAXTRAYAPPS) count = MAXTRAYAPPS;
+    for (int i = 0; i < count; i++) {
+        TrayApp a;
+        WCHAR key[32];
+        ZeroMemory(&a, sizeof a);
+        wsprintfW(key, L"Path%d", i); GetPrivateProfileStringW(L"TrayApps", key, L"", a.exe, MAX_PATH, g_ini);
+        wsprintfW(key, L"Class%d", i); GetPrivateProfileStringW(L"TrayApps", key, L"", a.cls, 128, g_ini);
+        wsprintfW(key, L"Title%d", i); GetPrivateProfileStringW(L"TrayApps", key, L"", a.title, 256, g_ini);
+        wsprintfW(key, L"Name%d", i); GetPrivateProfileStringW(L"TrayApps", key, L"", a.name, 128, g_ini);
+        if (!a.exe[0] || !a.cls[0] || !a.title[0] || TrayAppIndex(a.exe) >= 0) continue;
+        if (!a.name[0]) lstrcpynW(a.name, PathFindFileNameW(a.exe), 128);
+        g_trayApps[g_ntrayApps++] = a;
+    }
+}
+
+static void TrayWindowTitle(HWND h, WCHAR *title) {
+    GetWindowTextW(h, title, 256);
+    for (WCHAR *p = title; *p; p++) if (*p == L'\r' || *p == L'\n') *p = L' ';
+}
+
+static BOOL TrayProcessAlive(const TrayApp *a) {
+    return a->process && WaitForSingleObject(a->process, 0) == WAIT_TIMEOUT;
+}
+
+static BOOL TrayWindowValid(const TrayApp *a) {
+    if (!a->hwnd || !a->process || !IsWindow(a->hwnd)) return FALSE;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(a->hwnd, &pid);
+    WCHAR cls[128];
+    GetClassNameW(a->hwnd, cls, 128);
+    /* The retained live process handle already identifies the executable. */
+    return pid == a->pid && !lstrcmpW(cls, a->cls);
+}
+
+static void FindTrayWindow(TrayApp *app) {
+    HWND window = NULL;
+    while ((window = FindWindowExW(NULL, window, app->cls, NULL)) != NULL) {
+        WCHAR title[256], exe[MAX_PATH];
+        TrayWindowTitle(window, title);
+        if (lstrcmpW(title, app->title)) continue;
+        if (!ExeOfWindow(window, exe) || lstrcmpiW(exe, app->exe)) continue;
+        DWORD pid = 0;
+        GetWindowThreadProcessId(window, &pid);
+        if (app->process && pid != app->pid) continue;
+        if (!app->process) app->process = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+        if (app->process) { app->pid = pid; app->hwnd = window; return; }
+    }
+}
+
+static void RefreshTrayApps(void) {
+    for (int i = 0; i < g_ntrayApps; i++) {
+        TrayApp *app = &g_trayApps[i];
+        if (!TrayProcessAlive(app)) {
+            if (app->process) CloseHandle(app->process);
+            app->process = NULL; app->pid = 0; app->hwnd = NULL;
+        }
+        if (!TrayWindowValid(app)) { app->hwnd = NULL; FindTrayWindow(app); }
+        else if (IsWindowVisible(app->hwnd)) TrayWindowTitle(app->hwnd, app->title);
+    }
+}
+
+static void RemoveTrayApp(int index) {
+    if (index < 0 || index >= g_ntrayApps) return;
+    if (g_trayApps[index].process) CloseHandle(g_trayApps[index].process);
+    memmove(&g_trayApps[index], &g_trayApps[index + 1], sizeof(TrayApp) * (g_ntrayApps - index - 1));
+    ZeroMemory(&g_trayApps[--g_ntrayApps], sizeof(TrayApp));
+    SyncTrayApps();
+    ScheduleSave();
+}
+
+static void ActivateTrayApp(const Item *it) {
+    int index = TrayAppIndex(it->path);
+    if (index < 0) return;
+    RefreshTrayApps();
+    TrayApp *a = &g_trayApps[index];
+    if (!TrayProcessAlive(a)) { SetTimer(g_hwnd, T_SCAN, 50, NULL); return; }
+    if (!TrayWindowValid(a)) {
+        MessageBoxW(g_hwnd, L"应用仍在运行，但绑定的主窗口已经销毁。请先从系统托盘打开主窗口；窗口标题改变时可在设置中重新添加。", L"托盘应用常驻", MB_OK | MB_ICONINFORMATION);
+        return;
+    }
+    if (cfg.clickToggle && IsWindowVisible(a->hwnd)) {
+        ToggleWindowIdx(a->hwnd, (int)(it - items));
+        return;
+    }
+    ShowWindowAsync(a->hwnd, IsIconic(a->hwnd) ? SW_RESTORE : SW_SHOW);
+    SetForegroundWindow(a->hwnd);
+}
+
 /* ---- which pinned item does a window belong to? ----
    exe path > UWP app id > same file name (not for generic names) > same install folder > launched by the item's exe (parent chain) */
 static struct { DWORD pid, ppid; WCHAR name[36]; } g_ps[1400];
@@ -2771,7 +2905,7 @@ static BOOL CALLBACK ScanProc(HWND h, LPARAM lp) {
     WinIdOf(h, &wid);
     if (!wid.exe[0]) return TRUE;
     WCHAR *exe = wid.exe;
-    BOOL sepWin = cfg.multiMode == 1 && IsDocApp(exe, h);
+    BOOL sepWin = cfg.multiMode == 1 && TrayAppIndex(exe) < 0 && IsDocApp(exe, h);
     if (sepWin && c->nwin < 24) {
         WinRec *wr = &c->win[c->nwin++];
         wr->h = h;
@@ -2796,21 +2930,21 @@ static BOOL CALLBACK ScanProc(HWND h, LPARAM lp) {
         if (items[i].temp || items[i].type == T_WIN) continue;
         if (ItemMatchAny(&items[i], &wid)) { c->seen[i] = TRUE; known = TRUE; }
     }
-    if (known || sepWin || wid.host) return TRUE;
+    if (known || sepWin || wid.host || TrayAppIndex(exe) >= 0) return TRUE;
     for (int k = 0; k < c->nex; k++) if (!lstrcmpiW(g_scanEx[k], exe)) return TRUE;
     if (c->nex < 48) lstrcpynW(g_scanEx[c->nex++], exe, MAX_PATH);
     return TRUE;
 }
 
 static int TempEnd(void) {   /* running-app icons go before the document-window section */
-    for (int i = 0; i < nItems; i++) if (items[i].temp && items[i].type == T_SEP && items[i].appmode == 9) return i;
+    for (int i = 0; i < nItems; i++) if (items[i].temp && items[i].type == T_SEP && items[i].appmode >= 9) return i;
     return nItems;
 }
 
 static BOOL SyncTemp(ScanCtx *c) {
     BOOL ch = FALSE;
     for (int i = nItems - 1; i >= 0; i--) {
-        if (!items[i].temp || items[i].type == T_SEP || items[i].type == T_WIN) continue;
+        if (!items[i].temp || items[i].type == T_SEP || items[i].type == T_WIN || items[i].type == T_TRAY) continue;
         BOOL f = FALSE;
         for (int k = 0; k < c->nex; k++) if (!lstrcmpiW(g_scanEx[k], items[i].target)) f = TRUE;
         if (!f || !cfg.showRunning) { RemoveItem(i); ch = TRUE; }
@@ -2821,7 +2955,7 @@ static BOOL SyncTemp(ScanCtx *c) {
             for (int i = 0; i < nItems; i++) if (items[i].temp && items[i].type != T_SEP && !lstrcmpiW(items[i].target, g_scanEx[k])) have = TRUE;
             if (have) continue;
             BOOL hasSep = FALSE;
-            for (int i = 0; i < nItems; i++) if (items[i].temp && items[i].type == T_SEP && items[i].appmode != 9) hasSep = TRUE;
+            for (int i = 0; i < nItems; i++) if (items[i].temp && items[i].type == T_SEP && items[i].appmode < 9) hasSep = TRUE;
             if (nItems + 2 > MAXI) break;
             if (!hasSep) { Item s; FillItem(&s, T_SEP, 0, L"", L"", NULL); InsertItemStruct(TempEnd(), &s, TRUE); }
             WCHAR nm[128];
@@ -2835,12 +2969,51 @@ static BOOL SyncTemp(ScanCtx *c) {
         }
     }
     int nt = 0, ns = 0;
-    for (int i = 0; i < nItems; i++) if (items[i].temp && items[i].type != T_WIN && !(items[i].type == T_SEP && items[i].appmode == 9)) { if (items[i].type == T_SEP) ns++; else nt++; }
+    for (int i = 0; i < nItems; i++) if (items[i].temp && items[i].type != T_WIN && items[i].type != T_TRAY && !(items[i].type == T_SEP && items[i].appmode >= 9)) { if (items[i].type == T_SEP) ns++; else nt++; }
     if (nt == 0 && ns > 0) {
-        for (int i = nItems - 1; i >= 0; i--) if (items[i].temp && items[i].type == T_SEP && items[i].appmode != 9) RemoveItem(i);
+        for (int i = nItems - 1; i >= 0; i--) if (items[i].temp && items[i].type == T_SEP && items[i].appmode < 9) RemoveItem(i);
         ch = TRUE;
     }
     return ch;
+}
+
+static int TraySectionStart(void) {
+    for (int i = 0; i < nItems; i++)
+        if (items[i].type == T_TRAY || (items[i].temp && items[i].type == T_SEP && items[i].appmode == TRAY_SEP)) return i;
+    return nItems;
+}
+
+static BOOL SyncTrayApps(void) {
+    RefreshTrayApps();
+    BOOL changed = FALSE;
+    for (int i = nItems - 1; i >= 0; i--) {
+        if (items[i].type != T_TRAY) continue;
+        int at = TrayAppIndex(items[i].path);
+        if (at < 0 || !TrayProcessAlive(&g_trayApps[at])) { RemoveItem(i); changed = TRUE; }
+        else items[i].hwnd = g_trayApps[at].hwnd;
+    }
+    for (int k = 0; k < g_ntrayApps; k++) {
+        TrayApp *a = &g_trayApps[k];
+        if (!TrayProcessAlive(a)) continue;
+        BOOL have = FALSE;
+        for (int i = 0; i < nItems; i++) if (items[i].type == T_TRAY && !lstrcmpiW(items[i].path, a->exe)) have = TRUE;
+        if (have) continue;
+        BOOL divider = TraySectionStart() < nItems;
+        if (nItems + (divider ? 1 : 2) > MAXI) break;
+        if (!divider) { Item sp; FillItem(&sp, T_SEP, TRAY_SEP, L"", L"", NULL); InsertItemStruct(nItems, &sp, TRUE); }
+        Item it;
+        FillItem(&it, T_TRAY, 0, a->name, a->exe, NULL);
+        lstrcpynW(it.target, a->exe, MAX_PATH);
+        it.hwnd = a->hwnd;
+        it.running = TRUE;
+        InsertItemStruct(nItems, &it, TRUE);
+        changed = TRUE;
+    }
+    BOOL any = FALSE;
+    for (int i = 0; i < nItems; i++) if (items[i].type == T_TRAY) any = TRUE;
+    if (!any) for (int i = nItems - 1; i >= 0; i--)
+        if (items[i].temp && items[i].type == T_SEP && items[i].appmode == TRAY_SEP) { RemoveItem(i); changed = TRUE; }
+    return changed;
 }
 
 /* separate display: one dock icon per open Word / Excel / PowerPoint document and per Explorer window */
@@ -2867,8 +3040,8 @@ static BOOL SyncWin(ScanCtx *c) {
         if (have || nItems + 2 > MAXI) continue;
         BOOL hasSec = FALSE;
         for (int i = 0; i < nItems; i++) if (items[i].temp && items[i].type == T_SEP && items[i].appmode == 9) hasSec = TRUE;
-        if (!hasSec) { Item sp; FillItem(&sp, T_SEP, 9, L"", L"", NULL); InsertItemStruct(nItems, &sp, TRUE); ch = TRUE; }   /* its own section, behind its own divider */
-        int pos = nItems;
+        if (!hasSec) { Item sp; FillItem(&sp, T_SEP, 9, L"", L"", NULL); InsertItemStruct(TraySectionStart(), &sp, TRUE); ch = TRUE; }   /* its own section, behind its own divider */
+        int pos = TraySectionStart();
         for (int i = nItems - 1; i >= 0; i--) if (items[i].type == T_WIN && !lstrcmpiW(items[i].target, c->win[k].exe)) { pos = i + 1; break; }   /* same app: keep together */
         Item it;
         FillItem(&it, T_WIN, 0, c->win[k].title, c->win[k].exe, NULL);
@@ -2894,6 +3067,7 @@ static void ScanRunning(void) {
     }
     if (SyncTemp(&c)) ch = TRUE;
     if (SyncWin(&c)) ch = TRUE;
+    if (g_ntrayApps && SyncTrayApps()) ch = TRUE;
     for (int i = 0; i < nItems; i++) if (items[i].temp && !items[i].running) { items[i].running = TRUE; ch = TRUE; }
     for (int i = 0; i < nItems; i++)
         if (items[i].type == T_TRASH) {
@@ -3297,6 +3471,7 @@ static void LaunchItem(int i, BOOL force) {
     LogEvent(L"dock-item-activate", (DWORD)i);
     Item *it = &items[i];
     if (it->type == T_SEP) return;
+    if (it->type == T_TRAY) { ActivateTrayApp(it); return; }
     if (it->type == T_WIN) { ToggleWindowItem(i); return; }
     if (it->type == T_GROUP) { if (GetTickCount() - g_popupClosedTick > 350) ShowGroup(i); return; }
     if (it->type == T_NOTE) { ShowNote(); return; }
@@ -6923,7 +7098,7 @@ static void AnimFrame(float t) {
 static int ItemOfWin(HWND h) {
     DWORD key;
     /* separate-window icons know their exact window */
-    for (int i = 0; i < nItems; i++) if (items[i].type == T_WIN && items[i].hwnd == h) return i;
+    for (int i = 0; i < nItems; i++) if ((items[i].type == T_WIN || items[i].type == T_TRAY) && items[i].hwnd == h) return i;
     if (BoundKey(h, &key) >= 0) { int i = ItemOfKey(key); if (i >= 0) return i; }
     WinId w;
     WinIdOf(h, &w);
@@ -10161,8 +10336,63 @@ enum {
     IDM_AUTOSTART, IDM_ZOOM, IDM_ADDURL, IDM_ADDFILE, IDM_ADDFOLDER, IDM_ADDSEP_END, IDM_DELSEP, IDM_PIN, IDM_ICON_FILE,
     IDM_ICON_URL, IDM_ICON_RESET, IDM_UNGROUP, IDM_EMPTYBIN, IDM_ADDGROUP, IDM_ADDTRASH, IDM_NEWINST, IDM_LOCK, IDM_HIDE,
     IDM_SETICON, IDM_NEWSC, IDM_FOLDERFAN, IDM_NOTES, IDM_OPENFOLDER, IDM_NOTEOFF, IDM_ADDTEMPGRP, IDM_CLEARTEMP, IDM_LAUNCHPAD, IDM_GROUPWIDE, IDM_CLOSEAPP, IDM_COPYFILE, IDM_CLOSEWIN,
-    IDM_TASKMGR, IDM_MULTIMODE
+    IDM_TASKMGR, IDM_MULTIMODE, IDM_TRAYREMOVE
 };
+
+typedef struct { HMENU menu; HWND windows[128]; int count; } TrayPicker;
+
+static BOOL CALLBACK TrayPickerProc(HWND h, LPARAM lp) {
+    TrayPicker *p = (TrayPicker *)lp;
+    if (p->count >= 128 || !IsAppWindow(h)) return TRUE;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(h, &pid);
+    if (pid == GetCurrentProcessId()) return TRUE;
+    WCHAR exe[MAX_PATH], title[256], label[400];
+    if (!ExeOfWindow(h, exe) || TrayAppIndex(exe) >= 0) return TRUE;
+    TrayWindowTitle(h, title);
+    _snwprintf(label, 399, L"%s  [%s]", title, PathFindFileNameW(exe));
+    label[399] = 0;
+    if (AppendMenuW(p->menu, MF_STRING, p->count + 1, label)) p->windows[p->count++] = h;
+    return TRUE;
+}
+
+static void AddTrayApp(HWND parent) {
+    if (g_ntrayApps >= MAXTRAYAPPS) {
+        MessageBoxW(parent, L"最多选择 16 个托盘常驻应用。", L"托盘应用常驻", MB_OK | MB_ICONINFORMATION);
+        return;
+    }
+    TrayPicker picker;
+    ZeroMemory(&picker, sizeof picker);
+    picker.menu = CreatePopupMenu();
+    if (!picker.menu) return;
+    EnumWindows(TrayPickerProc, (LPARAM)&picker);
+    POINT pt;
+    GetCursorPos(&pt);
+    int choice = 0;
+    if (picker.count) choice = TrackPopupMenu(picker.menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y, 0, parent, NULL);
+    else MessageBoxW(parent, L"请先打开要添加的应用主窗口，再进行选择。", L"托盘应用常驻", MB_OK | MB_ICONINFORMATION);
+    DestroyMenu(picker.menu);
+    if (choice < 1 || choice > picker.count) return;
+    HWND h = picker.windows[choice - 1];
+    TrayApp a;
+    ZeroMemory(&a, sizeof a);
+    if (!IsAppWindow(h) || !ExeOfWindow(h, a.exe) || TrayAppIndex(a.exe) >= 0) return;
+    GetClassNameW(h, a.cls, 128);
+    TrayWindowTitle(h, a.title);
+    if (!a.cls[0] || !a.title[0]) return;
+    GetWindowThreadProcessId(h, &a.pid);
+    a.process = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, a.pid);
+    if (!a.process) {
+        MessageBoxW(parent, L"无法跟踪该应用进程，请确认 Dock 与应用的运行权限一致。", L"托盘应用常驻", MB_OK | MB_ICONINFORMATION);
+        return;
+    }
+    a.hwnd = h;
+    FileDescr(a.exe, a.name, 128);
+    if (!a.name[0]) lstrcpynW(a.name, PathFindFileNameW(a.exe), 128);
+    CleanName(a.name);
+    g_trayApps[g_ntrayApps++] = a;
+    ScheduleSave();
+}
 
 static int CacheFor(int z) { return z <= 96 ? 96 : z <= 128 ? 128 : z <= 192 ? 192 : 256; }
 
@@ -10269,6 +10499,12 @@ static void HandleCmd(int id) {
     int i = g_menuItem;
     switch (id) {
     case IDM_OPEN: LaunchItem(i, FALSE); break;
+    case IDM_TRAYREMOVE:
+        if (i >= 0 && i < nItems && items[i].type == T_TRAY) {
+            RemoveTrayApp(TrayAppIndex(items[i].path));
+            ScanRunning(); UpdateGeometry(); Kick();
+        }
+        break;
     case IDM_NEWINST: LaunchItem(i, TRUE); break;
     case IDM_CLOSEWIN: if (i >= 0 && items[i].hwnd) PostMessageW(items[i].hwnd, WM_CLOSE, 0, 0); break;
     case IDM_COPYFILE:
@@ -10347,6 +10583,10 @@ static void ShowMenuAt(int item, BOOL fromTray) {
         Item *it = &items[item];
         if (it->type == T_SEP) {
             if (!it->temp) { n = CmAdd(m, n, IDM_DELSEP, L"删除分割线", 0); n = CmAdd(m, n, 0, L"", CM_SEP); }
+        } else if (it->type == T_TRAY) {
+            n = CmAdd(m, n, IDM_OPEN, L"显示 / 最小化绑定的主窗口", 0);
+            n = CmAdd(m, n, IDM_TRAYREMOVE, L"从托盘常驻名单移除", 0);
+            n = CmAdd(m, n, 0, L"", CM_SEP);
         } else if (it->type == T_WIN) {
             n = CmAdd(m, n, IDM_OPEN, L"显示 / 最小化此窗口", 0);
             n = CmAdd(m, n, IDM_CLOSEWIN, L"关闭此窗口", CM_RED);
@@ -10416,7 +10656,8 @@ enum {
     A_NONE = 0, A_AUTOSTART = 1, A_SYS0 = 10 /* .. 15 */, A_ADDURL = 20, A_ADDFILE, A_ADDFOLDER, A_NEWSC, A_NEWGROUP, A_ADDSEP,
     A_EXP0, A_EXP1, A_EXP2, A_IMPORT, A_RESET, A_OPENDIR, A_LOWMODE, A_RECMODE, A_PICKDIR, A_AUTOMATCH, A_LOCCHANGE, A_LOCRESET,
     A_STYLEEXP, A_STYLEIMP, A_OPENNOTE, A_NEWTEMP, A_LPRESET, A_CHECKUPD, A_OPENREPO, A_OPENUPD, A_HIGHMODE, A_ALLWIDGETON, A_ALLWIDGETOFF, A_RESETALL,
-    A_HKEDIT, A_GAMEADD, A_PICKDARKDIR, A_DARKMATCH, A_LOGEXPORT = 60, A_LOGCLEAR = 61, A_ITEM = 1000, A_DARKITEM = 1300, A_PEXP = 2000, A_PIMP = 2100
+    A_HKEDIT, A_GAMEADD, A_PICKDARKDIR, A_DARKMATCH, A_LOGEXPORT = 60, A_LOGCLEAR = 61, A_TRAYADD = 62,
+    A_ITEM = 1000, A_DARKITEM = 1300, A_PEXP = 2000, A_PIMP = 2100, A_TRAYREMOVE = 2300
 };
 typedef struct {
     int type, page, act, act2, mn, mx, nopts, depVal, depNeg, perf;
@@ -10626,6 +10867,16 @@ static void BuildRows(void) {
     RTog(P, L"防止被清理工具关闭", &cfg.guardian, L"启动一个极小的守护进程（约 1 MB），被结束后自动重新打开"); Perf(1);
     RTog(P, L"隐藏系统托盘图标", &cfg.trayHide, L"打开后右下角通知区域也不再显示 MiniDock 图标（仍可用快捷键或右键 Dock 打开设置）");
     RTog(P, L"右键菜单显示“任务管理器”", &cfg.mnTaskMgr, NULL);
+    RHdr(P, L"托盘应用常驻");
+    RTxt(P, L"自选应用运行时显示在 Dock 最右侧，隐藏到系统托盘后保留，退出后移除。请打开应用主窗口后添加；点击右侧图标可恢复该窗口。", 72);
+    RBtn(P, L"从已打开的应用窗口添加…", A_TRAYADD);
+    for (int i = 0; i < g_ntrayApps; i++) {
+        RBtn(P, L"", A_TRAYREMOVE + i);
+        Row *r = LastRow();
+        _snwprintf(r->dyn, 199, L"移除 %s（%s）", g_trayApps[i].name, PathFindFileNameW(g_trayApps[i].exe));
+        r->dyn[199] = 0;
+        r->label = r->dyn;
+    }
     RHdr(P, L"网页应用");
     RTog(P, L"网页默认以应用窗口打开", &cfg.webApp, L"使用 Edge / Chrome 的独立窗口模式，不再显示为浏览器标签页");
     RCmb(P, L"网页使用的浏览器", &cfg.browser, o_browser, 5);
@@ -11748,6 +11999,10 @@ static void DoAct(HWND h, int act) {
         ApplySettings();
         break;
     case A_HKEDIT: CaptureHotkey(h); BuildRows(); if (g_hset) InvalidateRect(g_hset, NULL, FALSE); break;
+    case A_TRAYADD:
+        AddTrayApp(h);
+        ScanRunning(); UpdateGeometry(); Kick(); BuildRows(); SettingsRedraw();
+        break;
     case A_GAMEADD: {
         HWND f = GetForegroundWindow();
         DWORD fpid = 0; if (f) GetWindowThreadProcessId(f, &fpid);
@@ -11834,6 +12089,11 @@ static void DoAct(HWND h, int act) {
         break;
     }
     default:
+        if (act >= A_TRAYREMOVE && act < A_TRAYREMOVE + MAXTRAYAPPS) {
+            RemoveTrayApp(act - A_TRAYREMOVE);
+            ScanRunning(); UpdateGeometry(); Kick(); BuildRows(); SettingsRedraw();
+            break;
+        }
         if ((act >= A_ITEM && act < A_ITEM + 200) || (act >= A_DARKITEM && act < A_DARKITEM + 200)) {
             BOOL darkItem = (act >= A_DARKITEM && act < A_DARKITEM + 200);
             int ii = darkItem ? act - A_DARKITEM : act - A_ITEM;
@@ -12713,7 +12973,7 @@ static LRESULT CALLBACK DockProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             TrackMouseEvent(&te);
         }
         if (GetCapture() == h && pressIdx >= 0) {
-            if (!dragging && !cfg.lock && (abs(x - pressPt.x) > 9 || abs(y - pressPt.y) > 9) && !(items[pressIdx].temp && items[pressIdx].type == T_SEP) && items[pressIdx].type != T_WIN) {
+            if (!dragging && !cfg.lock && (abs(x - pressPt.x) > 9 || abs(y - pressPt.y) > 9) && !(items[pressIdx].temp && items[pressIdx].type == T_SEP) && items[pressIdx].type != T_WIN && items[pressIdx].type != T_TRAY) {
                 dragging = TRUE; dragIdx = pressIdx; ClosePreview();
             }
             if (dragging) {
@@ -13040,6 +13300,7 @@ static LRESULT CALLBACK DockProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         LogEvent(L"shutdown", 0);
         SaveNow();
         GpbFree();
+        ClearTrayApps();
         if (g_quitEvt) SetEvent(g_quitEvt);
         SetMinHook(FALSE);
         SetupAppBar(FALSE, 0);
