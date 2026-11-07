@@ -1194,10 +1194,10 @@ static DWORD WINAPI DlThread(LPVOID p) {
     } else {
         static const WCHAR *fmts[4] = { L"https://www.google.com/s2/favicons?domain=%s&sz=128", L"https://%s/apple-touch-icon.png",
                                         L"https://%s/favicon.ico", L"https://icons.duckduckgo.com/ip3/%s.ico" };
-        WCHAR cand[4][MAX_PATH + 8], u[700];
+        WCHAR cand[4][MAX_PATH + 8] = { 0 }, u[700];
         UINT best = 0;
         int bi = -1;
-        for (int k = 0; k < 7; k++) {
+        for (int k = 0; k < (int)(sizeof fmts / sizeof fmts[0]); k++) {
             wsprintfW(cand[k], L"%s.%d", j->file, k);
             wsprintfW(u, fmts[k], j->host);
             if (DlOne(u, cand[k])) {
@@ -1207,7 +1207,7 @@ static DWORD WINAPI DlThread(LPVOID p) {
             }
         }
         if (bi >= 0) MoveFileExW(cand[bi], j->file, MOVEFILE_REPLACE_EXISTING);
-        for (int k = 0; k < 4; k++) DeleteFileW(cand[k]);
+        for (int k = 0; k < (int)(sizeof cand / sizeof cand[0]); k++) if (cand[k][0]) DeleteFileW(cand[k]);
     }
     if (g_hwnd) PostMessageW(g_hwnd, WM_APP_ICON, 0, 0);
     CoUninitialize();

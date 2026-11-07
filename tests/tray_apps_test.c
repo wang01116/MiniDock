@@ -38,6 +38,19 @@ static void DrainFixtureMessages(void) {
         Sleep(1);
     }
 }
+/* A separately running Dock may animate normal-style fixtures. Observe the final state,
+   rather than the brief restore that its system-minimize animation uses. */
+static BOOL WaitFixtureIconic(HWND window, BOOL iconic) {
+    DWORD started = GetTickCount(), stable = 0;
+    while (GetTickCount() - started < 2500) {
+        DrainFixtureMessages();
+        if (!!IsIconic(window) == !!iconic) {
+            if (!stable) stable = GetTickCount();
+            if (GetTickCount() - stable >= 150) return TRUE;
+        } else stable = 0;
+    }
+    return FALSE;
+}
 static int CountType(int type) {
     int count = 0;
     for (int i = 0; i < nItems; i++) if (items[i].type == type) count++;
@@ -226,8 +239,9 @@ int main(int argc, char **argv) {
     LoadTrayApps();
     CHECK(g_ntrayApps == 0, "negative config count is clamped");
     DeleteFileW(g_ini);
+    /* Keep normal window styles to exercise the real app-window filter; start offscreen. */
     HWND ordinary = CreateWindowExW(WS_EX_NOACTIVATE, testClass, L"Ordinary running app fixture", WS_OVERLAPPEDWINDOW,
-                                    testWorkArea.left + 30, testWorkArea.top + 30, 600, 500, NULL, NULL, g_inst, NULL);
+                                    -30000, -30000, 600, 500, NULL, NULL, g_inst, NULL);
     ShowWindow(ordinary, SW_SHOWNOACTIVATE);
     DrainFixtureMessages();
     CHECK(IsAppWindow(ordinary), "ordinary fixture is accepted by the normal app-window filter");
@@ -239,10 +253,10 @@ int main(int argc, char **argv) {
     SetForegroundWindow(ordinary);
     LaunchItem(0, FALSE);
     DrainFixtureMessages();
-    CHECK(IsIconic(ordinary), "ordinary runtime app minimizes through LaunchItem");
+    CHECK(WaitFixtureIconic(ordinary, TRUE), "ordinary runtime app minimizes through LaunchItem");
     LaunchItem(0, FALSE);
     DrainFixtureMessages();
-    CHECK(!IsIconic(ordinary), "ordinary runtime app restores through LaunchItem");
+    CHECK(WaitFixtureIconic(ordinary, FALSE), "ordinary runtime app restores through LaunchItem");
     HWND clickHost = TestWindow(L"Dock click fixture", 300, 100);
     g_hwnd = clickHost;
     Item fixedItem;
@@ -273,9 +287,9 @@ int main(int argc, char **argv) {
         ClickItem(indices[i], 0);
         CHECK(fixtureForeground == targets[i] && !IsIconic(targets[i]), "mixed mouse click brings a background window forward");
         ClickItem(indices[i], 0);
-        CHECK(IsIconic(targets[i]), "mixed repeated mouse click minimizes the foreground window");
+        CHECK(WaitFixtureIconic(targets[i], TRUE), "mixed repeated mouse click minimizes the foreground window");
         ClickItem(indices[i], 0);
-        CHECK(!IsIconic(targets[i]), "mixed mouse click restores a minimized window");
+        CHECK(WaitFixtureIconic(targets[i], FALSE), "mixed mouse click restores a minimized window");
     }
     CHECK(launchRequests == 0, "ordinary clicks never relaunch despite stale queued Shift state");
     fixtureShiftState = 0; /* opposite mismatch: mouse message carries an actual Shift click */
