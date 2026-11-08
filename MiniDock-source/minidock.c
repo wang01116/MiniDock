@@ -7986,16 +7986,37 @@ static BOOL CcEthUp(void) {
     return ethUp && !wifiUp;
 }
 
+/* Crescent moon = the disc (cx, cy, R) minus a disc of radius r offset d to the right.
+   Drawing the two arcs by hand left the tips open, which reads as a "U" rather than a moon;
+   solving for where the two circles actually cross keeps the outline closed at any size. */
+static void CrescentPath(GpPath *p, float cx, float cy, float R, float d, float r) {
+    float a = (d * d + R * R - r * r) / (2 * d);   /* x of the two crossings, measured from cx */
+    float h = R * R - a * a;
+    float y = h > 0 ? sqrtf(h) : 0;                /* their distance from the axis */
+    float ao = atan2f(y, a) * 57.29578f;           /* a tip, as seen from the outer disc */
+    float ai = atan2f(y, a - d) * 57.29578f;       /* the same tip, as seen from the inner disc */
+    GdipAddPathArc(p, cx - R, cy - R, 2 * R, 2 * R, ao, 360.f - 2 * ao);
+    GdipAddPathArc(p, cx + d - r, cy - r, 2 * r, 2 * r, 360.f - ai, -(360.f - 2 * ai));
+    GdipClosePathFigure(p);
+}
+
 static void CcGlyph(GpGraphics *g, int kind, float x, float y, float s, ARGB c) {
     GpPen *p;
     GdipCreatePen1(c, s * 0.13f, 2, &p);   /* bolder, consistent stroke weight */
     switch (kind) {
     case 0: MIcoWifi(g, x + s / 2, y + s / 2, s, c); break;
     case 1: MIcoBt(g, x + s / 2, y + s / 2, s, c); break;
-    case 2:   /* crescent moon (two arcs, not a "C") */
-        GdipDrawArc(g, p, x + s * 0.06f, y + s * 0.06f, s * 0.88f, s * 0.88f, -25, 260);
-        GdipDrawArc(g, p, x + s * 0.24f, y + s * 0.02f, s * 0.86f, s * 0.86f, 175, -125);
+    case 2: {   /* crescent moon */
+        GpPath *mp = NULL;
+        if (GdipCreatePath(0, &mp) == 0) {
+            GpBrush *fb = NULL;
+            CrescentPath(mp, x + s * 0.50f, y + s * 0.50f, s * 0.46f, s * 0.26f, s * 0.40f);
+            GdipCreateSolidFill(c, &fb);
+            if (fb) { GdipFillPath(g, fb, mp); GdipDeleteBrush(fb); }
+            GdipDeletePath(mp);
+        }
         break;
+    }
     case 3:   /* location pin */
         GdipDrawEllipse(g, p, x + s * 0.20f, y + s * 0.12f, s * 0.60f, s * 0.60f);
         FillRR(g, c, x + s * 0.45f, y + s * 0.37f, s * 0.12f, s * 0.12f, s * 0.06f);
@@ -8606,10 +8627,8 @@ static void DrawMode(GpGraphics *g, float x, float y, float w, float h) {
     GdipDeletePen(p);
     GpPath *mp = NULL;
     if (GdipCreatePath(0, &mp) == 0) {   /* solid crescent moon inside */
-        float R = s * 0.26f;
-        GdipAddPathArc(mp, cx - R, cy - R, R * 2, R * 2, 45, 280);
-        GdipAddPathArc(mp, cx - R * 0.55f, cy - R * 0.80f, R * 1.2f, R * 1.6f, 225, 150);
-        GdipClosePathFigure(mp);
+        float R = s * 0.30f;
+        CrescentPath(mp, cx + s * 0.02f, cy, R, R * 0.57f, R * 0.87f);
         GpBrush *fb = NULL;
         GdipCreateSolidFill(c, &fb);
         if (fb) { GdipFillPath(g, fb, mp); GdipDeleteBrush(fb); }
