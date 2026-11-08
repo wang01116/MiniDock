@@ -183,6 +183,12 @@ typedef struct {
     int mnAuto, mnNotes, mnAdd, launchpad;
     int wSide, wOrder, notifyW, fanBgL, fanBgD, fanFgL, fanFgD, pinMenu, multiMode, updChk, updLast, lpCols, lpRows, fanDrag, hideTaskbar, trayHide, ctrlCenter, ccEnergy, ccHotspot, resMon, toolW, wideMask, modeW, uiFrost, lpFrost, trayW, wMerge, statusBar, sbFrost, sbOpacity, sbColor, sbRadius, sbHeight, sbFollowSys, sbTopGap, sbMaxAvoid, sbFloat, sbSideGap, sbAutoHide, sbBattery, sepScale, menuFrost;
     int sbBorder;      /* draw the hairline frame around the top status bar */
+    /* Auto-hide hysteresis, in milliseconds. Hide* = how long the cursor must
+       stay away before hiding; Show* = how long it must stay in the hot zone
+       before a hidden dock comes back. Two scenes: normal, and when the
+       foreground window is maximized (its edges touch the screen, so the
+       cursor grazes the hot zone far more often). 0 = immediate (old behavior). */
+    int hideDelay, showDelay, hideDelayMax, showDelayMax;
     int grpFloat;      /* show the app groups in their own always-on-top strip (independent of the dock) */
     int hkMods, hkVk;  /* customisable summon hotkey */
     int gameGuard, gameAuto;   /* game mode: never reveal the dock over a game */
@@ -289,6 +295,10 @@ static DWORD gFsEdgeTick; /* when the pointer started resting on the edge of a f
 #define SUMMON_MS 4000    /* after Ctrl+Alt+D the dock stays out this long, even over a fullscreen app */
 static DWORD gSummonTick;   /* the global hotkey just summoned the dock: no auto-hide for a moment */
 static DWORD gLastNear;
+/* Tick when the cursor started resting in the hot zone while the dock was
+   hidden. 0 = no pending reveal. Any exit from the hot zone clears it, so a
+   quick graze along the screen edge cannot flip the dock back out. */
+static DWORD gShowPending;
 static BOOL gMenuOpen, gAnimOn, gMoved, gFsHidden, gLpOpen;
 static DWORD g_launchTick;
 static HWND g_lpWnd;
@@ -480,6 +490,8 @@ static const struct { const WCHAR *k; int *p; } g_tab[] = {
     { L"WSide", &cfg.wSide }, { L"WOrder", &cfg.wOrder }, { L"NotifyW", &cfg.notifyW }, { L"FanBgL", &cfg.fanBgL }, { L"FanBgD", &cfg.fanBgD },
     { L"FanFgL", &cfg.fanFgL }, { L"FanFgD", &cfg.fanFgD }, { L"PinMenu", &cfg.pinMenu }, { L"MultiMode", &cfg.multiMode }, { L"UpdChk", &cfg.updChk }, { L"UpdLast", &cfg.updLast }, { L"LpCols", &cfg.lpCols }, { L"LpRows", &cfg.lpRows }, { L"FanDrag", &cfg.fanDrag }, { L"TrayHide", &cfg.trayHide }, { L"CtrlCenter", &cfg.ctrlCenter }, { L"CcEnergy", &cfg.ccEnergy }, { L"CcHotspot", &cfg.ccHotspot }, { L"ResMon", &cfg.resMon }, { L"ToolW", &cfg.toolW }, { L"WideMask", &cfg.wideMask }, { L"ModeW", &cfg.modeW }, { L"UiFrost", &cfg.uiFrost }, { L"LpFrost", &cfg.lpFrost }, { L"TrayW", &cfg.trayW }, { L"WMerge", &cfg.wMerge }, { L"StatusBar", &cfg.statusBar }, { L"SbFrost", &cfg.sbFrost }, { L"SbOpacity", &cfg.sbOpacity }, { L"SbColor", &cfg.sbColor }, { L"SbRadius", &cfg.sbRadius }, { L"SbHeight", &cfg.sbHeight }, { L"SbFollowSys", &cfg.sbFollowSys }, { L"SbTopGap", &cfg.sbTopGap }, { L"SbMaxAvoid", &cfg.sbMaxAvoid }, { L"SbFloat", &cfg.sbFloat }, { L"SbSideGap", &cfg.sbSideGap }, { L"SbAutoHide", &cfg.sbAutoHide }, { L"SbBattery", &cfg.sbBattery }, { L"SepScale", &cfg.sepScale }, { L"MenuFrost", &cfg.menuFrost },
     { L"SbBorder", &cfg.sbBorder }, { L"GrpFloat", &cfg.grpFloat },
+    { L"HideDelay", &cfg.hideDelay }, { L"ShowDelay", &cfg.showDelay },
+    { L"HideDelayMax", &cfg.hideDelayMax }, { L"ShowDelayMax", &cfg.showDelayMax },
     { L"HkMods", &cfg.hkMods }, { L"HkVk", &cfg.hkVk }, { L"GameGuard", &cfg.gameGuard }, { L"GameAuto", &cfg.gameAuto },
     { L"CmMerge", &cfg.cmMerge }, { L"CmSep", &cfg.cmSep }, { L"CmIcon", &cfg.cmIcon }, { L"CmRename", &cfg.cmRename }, { L"CmCopy", &cfg.cmCopy }, { L"CmDock", &cfg.cmDock },
     { L"LpTabs", &cfg.lpTabs }, { L"LpOpacity", &cfg.lpOpacity }, { L"ReflMode", &cfg.reflMode }, { L"ReflGrad", &cfg.reflGrad },
@@ -518,6 +530,10 @@ static void DefaultCfg(void) {
     cfg.statusBar = 0; cfg.sbBattery = 1; cfg.sbFrost = 1; cfg.sbOpacity = 88; cfg.sbColor = -1; cfg.sbRadius = 10; cfg.sbHeight = 32; cfg.sbFollowSys = 1; cfg.sbTopGap = 0;
     cfg.sbMaxAvoid = 0; cfg.sbFloat = 0; cfg.sbSideGap = 12; cfg.sbAutoHide = 0;
     cfg.sbBorder = 1; cfg.grpFloat = 0;
+    /* 520 keeps the old hard-coded hide grace; 180 is the new show-side
+       debounce (the old code revealed the dock the instant the edge was hit). */
+    cfg.hideDelay = 520; cfg.showDelay = 180;
+    cfg.hideDelayMax = 900; cfg.showDelayMax = 400;
     cfg.hkMods = MOD_CONTROL | MOD_ALT; cfg.hkVk = 'D';
     cfg.gameGuard = 0; cfg.gameAuto = 1; cfg.lpTabs = 1; cfg.lpOpacity = 88;
     cfg.cmMerge = cfg.cmSep = cfg.cmIcon = cfg.cmRename = cfg.cmCopy = cfg.cmDock = 1;
@@ -10994,6 +11010,14 @@ static void BuildRows(void) {
     RTog(P, L"自动识别全屏游戏", &cfg.gameAuto, L"独占全屏（Direct3D）游戏自动生效；其它游戏可手动加入列表");
     RBtn(P, L"将当前前台程序加入 / 移出游戏列表", A_GAMEADD);
     RTxt(P, L"点击会切换当前前台程序的游戏列表状态：未加入则加入，已加入则移除。游戏模式同时隐藏 Dock 和顶部状态栏。", 38);
+    RHdr(P, L"显示 / 隐藏灵敏度（普通场景）");
+    RTxt(P, L"光标移开后延迟收起；隐藏时光标要连续停留才展开。数值越大越不容易因热区边缘抖动而反复显隐，单位 ms。", 56);
+    RSl(P, L"移开光标后收起延迟", &cfg.hideDelay, 0, 3000, L" ms");
+    RSl(P, L"隐藏时唤醒显示延迟", &cfg.showDelay, 0, 3000, L" ms");
+    RHdr(P, L"显示 / 隐藏灵敏度（应用最大化时）");
+    RTxt(P, L"最大化窗口贴着屏幕边缘，光标更容易误触；这一档建议设得比普通场景更长，单位 ms。", 56);
+    RSl(P, L"移开光标后收起延迟（最大化）", &cfg.hideDelayMax, 0, 3000, L" ms");
+    RSl(P, L"隐藏时唤醒显示延迟（最大化）", &cfg.showDelayMax, 0, 3000, L" ms");
     PageFooter(P);
 
     P = 22;  /* ---- 弧形展开 ---- */
@@ -12843,12 +12867,14 @@ static void OnAutoHide(void) {
            aiming. Only FsWatch's deliberate peek, or Ctrl+Alt+D, may bring the dock out. */
         if (gFsPeek || (gSummonTick && now - gSummonTick < SUMMON_MS)) {
             gLastNear = now;
+            gShowPending = 0;
             if (gHideTgt) { gHideTgt = 0; Kick(); }
         }
         return;
     }
     if (gSummonTick && now - gSummonTick < SUMMON_MS) {   /* the hotkey just summoned it: keep it out */
         gLastNear = now;
+        gShowPending = 0;
         if (gHideTgt) { gHideTgt = 0; Kick(); }
         return;
     }
@@ -12860,12 +12886,40 @@ static void OnAutoHide(void) {
     case E_RIGHT: edgeHit = p.x >= mr.right - band && p.y >= winY && p.y < winY + winH; break;
     default: edgeHit = p.y >= mr.bottom - band && p.x >= winX && p.x < winX + winW; break;
     }
+    /* Maximized windows hug the screen edges, so the cursor brushes the hot
+       zone far more often. Use the longer delay pair for that scene. This is
+       deliberately separate from g_fsKind (borderless fullscreen), which hides
+       the whole dock instead of just tuning the timing. */
+    HWND fg = GetForegroundWindow();
+    BOOL maximized = fg && fg != g_hwnd && IsZoomed(fg);
+    int hideMs = maximized ? cfg.hideDelayMax : cfg.hideDelay;
+    int showMs = maximized ? cfg.showDelayMax : cfg.showDelay;
+    if (hideMs < 0) hideMs = 0;
+    if (showMs < 0) showMs = 0;
+
     BOOL near_ = gHideTgt ? edgeHit : CursorNearDock(p);
     if (near_ || gMenuOpen || dragging || gapIdx >= 0 || g_pv) {
         gLastNear = now;
-        if (gHideTgt) { gHideTgt = 0; Kick(); }
+        if (gHideTgt) {
+            /* Asymmetric hysteresis: revealing requires a CONTINUOUS stay.
+               showMs == 0 keeps the old "touch the edge, dock appears" behavior. */
+            if (showMs == 0) {
+                gShowPending = 0;
+                gHideTgt = 0; Kick();
+            } else if (!gShowPending) {
+                gShowPending = now;
+            } else if (now - gShowPending >= (DWORD)showMs) {
+                gShowPending = 0;
+                gHideTgt = 0; Kick();
+            }
+        } else {
+            gShowPending = 0;
+        }
         return;
     }
+    /* Cursor left the hot zone: cancel any half-finished reveal wait. Do NOT
+       refresh gLastNear here, so hiding still counts from the last "near". */
+    gShowPending = 0;
     if (cfg.mode == 2) {
         OvCtx oc;
         float bx, by, bw, bh;
@@ -12876,7 +12930,7 @@ static void OnAutoHide(void) {
         EnumWindows(OvProc, (LPARAM)&oc);
         if (!oc.hit) { if (gHideTgt) { gHideTgt = 0; Kick(); } gLastNear = now; return; }
     }
-    if (!gHideTgt && now - gLastNear > 520) { gHideTgt = 1; hover = FALSE; mouseU = -1; Kick(); }
+    if (!gHideTgt && now - gLastNear > (DWORD)hideMs) { gHideTgt = 1; hover = FALSE; mouseU = -1; Kick(); }
 }
 
 static DWORD g_hotTick;
