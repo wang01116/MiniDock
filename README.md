@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
 
 ![](https://github.com/wang01116/MiniDock/blob/main/assets/logo-128.png?raw=true)
 
@@ -57,6 +57,7 @@ MiniDock 是一个参考 macOS Dock 风格的 Windows 桌面 Dock 栏。它使�
 1. 前往 [Releases](../../releases) 下载最新版 `MiniDock.exe`。
 2. 双击运行即可，**无需安装**。
 3. 首次运行会在任务栏托盘显示图标，右键可打开 Dock 设置。
+4. 之后可在「Dock 设置 → 关于 → 检查更新」里直接升级：程序自行测速选择镜像、下载并校验 SHA-256，确认无误后重启替换，无需手动覆盖 exe。
 
 > 配置默认保存在 `%APPDATA%\MiniDock\`；若希望随身携带，在 exe 同目录新建一个名为 `MiniDock.portable` 的空文件，配置与图标缓存便会保存在 exe 旁边。
 
@@ -69,7 +70,7 @@ cd MiniDock-source
 windres -O coff res/app.rc -o app_res.o -Ires
 gcc -Os -mwindows -s -static-libgcc -o MiniDock.exe minidock.c app_res.o \
     -lgdiplus -lole32 -loleaut32 -lshell32 -lshlwapi -luser32 -lgdi32 \
-    -lcomctl32 -lcomdlg32 -luuid -lurlmon -lversion -ldwmapi -ladvapi32 -lpsapi
+    -lcomctl32 -lcomdlg32 -luuid -lurlmon -lversion -ldwmapi -ladvapi32 -lpsapi -lwinhttp
 ```
 
 Windows 下也可以直接运行仓库中的 `build.bat`。
