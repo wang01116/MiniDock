@@ -17,6 +17,7 @@
 #include <commoncontrols.h>
 #include <commdlg.h>
 #include <urlmon.h>
+#include <winhttp.h>
 #include <oleidl.h>
 #include <dwmapi.h>
 #include <math.h>
@@ -28,6 +29,7 @@
 #include <ntddvdeo.h>
 #include <iptypes.h>
 #include <stdio.h>
+#include <string.h>
 #include <richedit.h>
 #include <tlhelp32.h>
 #include <wtsapi32.h>
@@ -383,12 +385,15 @@ static BOOL BuildFromPidl(Item *it, LPCITEMIDLIST pidl);
 static LRESULT CALLBACK DockProc(HWND, UINT, WPARAM, LPARAM);
 static void SetPinMenu(BOOL on);
 static void StartUpdateCheck(BOOL autoMode);
+static void StartUpdateDownload(void);
+static BOOL ApplyUpdate(void);
 static void PinPath(const WCHAR *path);
 static void LoadTrayApps(void);
 static void ClearTrayApps(void);
 static BOOL SyncTrayApps(void);
-static WCHAR g_updText[220], g_updUrl[320];
-static BOOL g_updNew, g_updAuto;
+static WCHAR g_updText[220];
+static WCHAR g_updStage[MAX_PATH];   /* verified exe waiting to be swapped in */
+static BOOL g_updNew, g_updAuto, g_updReady;
 
 /* ---------------- helpers ---------------- */
 static int Sc(int v) { return MulDiv(v, g_dpi, 96); }
@@ -10656,7 +10661,7 @@ enum {
     A_NONE = 0, A_AUTOSTART = 1, A_SYS0 = 10 /* .. 15 */, A_ADDURL = 20, A_ADDFILE, A_ADDFOLDER, A_NEWSC, A_NEWGROUP, A_ADDSEP,
     A_EXP0, A_EXP1, A_EXP2, A_IMPORT, A_RESET, A_OPENDIR, A_LOWMODE, A_RECMODE, A_PICKDIR, A_AUTOMATCH, A_LOCCHANGE, A_LOCRESET,
     A_STYLEEXP, A_STYLEIMP, A_OPENNOTE, A_NEWTEMP, A_LPRESET, A_CHECKUPD, A_OPENREPO, A_OPENUPD, A_HIGHMODE, A_ALLWIDGETON, A_ALLWIDGETOFF, A_RESETALL,
-    A_HKEDIT, A_GAMEADD, A_PICKDARKDIR, A_DARKMATCH, A_LOGEXPORT = 60, A_LOGCLEAR = 61, A_TRAYADD = 62,
+    A_HKEDIT, A_GAMEADD, A_PICKDARKDIR, A_DARKMATCH, A_LOGEXPORT = 60, A_LOGCLEAR = 61, A_TRAYADD = 62, A_DOWNUPD = 63, A_APPLYUPD = 64,
     A_ITEM = 1000, A_DARKITEM = 1300, A_PEXP = 2000, A_PIMP = 2100, A_TRAYREMOVE = 2300
 };
 typedef struct {
@@ -11192,10 +11197,12 @@ static void BuildRows(void) {
     P = P_ABOUT;   /* ---- 关于（含配置与备份） ---- */
     RTxt(P, L"ABOUT", 300);
     RHdr(P, L"检查更新");
-    RTxt(P, L"UPDATE", 40);
-    RBtn2(P, L"检查更新", A_CHECKUPD, L"前往下载最新版本", A_OPENUPD);
-    RTog(P, L"每天自动检查一次更新", &cfg.updChk, L"仅访问 GitHub 的 Releases 接口，不上传任何信息");
-    RBtn(P, L"打开 GitHub 仓库（wang01116/MiniDock）", A_OPENREPO);
+    RTxt(P, L"UPDATE", 56);
+    RBtn2(P, L"检查更新", A_CHECKUPD, L"下载并校验更新", A_DOWNUPD);
+    RBtn(P, L"重启并完成更新", A_APPLYUPD);
+    RTog(P, L"每天自动检查一次更新", &cfg.updChk, L"只在后台查询版本号，不会自动下载");
+    RTxt(P, L"下载时依次测速 gh-proxy.com、ghfast.top 等镜像并选最快的；校验 GitHub 公布的 SHA-256 之后才替换程序，校验不通过则保留当前版本。", 68);
+    RBtn2(P, L"打开发布页", A_OPENUPD, L"打开 GitHub 仓库", A_OPENREPO);
     RHdr(P, L"配置文件位置");
     NewRow(P, R_TEXT, g_dir, 32);
     RBtn2(P, L"更改位置…", A_LOCCHANGE, L"恢复默认位置", A_LOCRESET);
@@ -11974,8 +11981,10 @@ static void DoAct(HWND h, int act) {
     case A_OPENNOTE: ShowNote(); break;
     case A_LPRESET: { WCHAR lf[MAX_PATH]; PathCombineW(lf, g_dir, L"launchpad.dat"); DeleteFileW(lf); } break;
     case A_CHECKUPD: StartUpdateCheck(FALSE); SettingsRedraw(); break;
+    case A_DOWNUPD: StartUpdateDownload(); SettingsRedraw(); break;
+    case A_APPLYUPD: ApplyUpdate(); break;
     case A_OPENREPO: ShellExecuteW(NULL, L"open", GH_REPO, NULL, NULL, SW_SHOWNORMAL); break;
-    case A_OPENUPD: ShellExecuteW(NULL, L"open", g_updUrl[0] ? g_updUrl : GH_REPO L"/releases", NULL, NULL, SW_SHOWNORMAL); break;
+    case A_OPENUPD: ShellExecuteW(NULL, L"open", GH_REPO L"/releases", NULL, NULL, SW_SHOWNORMAL); break;
     case A_LOCCHANGE: {
         BROWSEINFOW b;
         ZeroMemory(&b, sizeof b);
@@ -12643,76 +12652,817 @@ static void PinPath(const WCHAR *path) {
     Kick();
 }
 
-static volatile LONG g_updBusy;
-static void TrayBalloon(const WCHAR *title, const WCHAR *text);
+/* ======================= in-app updater: check, download, verify, swap =======================
+   Checking for updates was never the hard part. The old flow only turned a tag name into a
+   browser page, which left the user to find the asset, download it over a link that is often
+   blocked, unpack it and move it over the running exe by hand. This finishes the round trip:
 
-static int VerNum(const char *s) {   /* "v1.4.0" -> 10400 */
-    int v[3] = { 0, 0, 0 }, k = 0;
-    while (*s && (*s < '0' || *s > '9')) s++;
-    while (*s && k < 3) {
-        if (*s >= '0' && *s <= '9') v[k] = v[k] * 10 + (*s - '0');
-        else if (*s == '.') k++;
-        else break;
-        s++;
+       check the release -> race the mirrors -> download -> verify SHA-256 -> swap on exit
+
+   Nothing is replaced before the bytes match the digest GitHub publishes for that asset, and
+   the swap is a `move` performed by a detached shell after this process is gone, because
+   Windows will not let a running image overwrite itself.
+*/
+
+#define UPD_REPO   L"wang01116/MiniDock"
+#define UPD_LATEST L"https://api.github.com/repos/" UPD_REPO L"/releases/latest"
+#define UPD_LIST   L"https://api.github.com/repos/" UPD_REPO L"/releases?per_page=15"
+#define UPD_HDR    L"Accept: application/vnd.github+json\r\nX-GitHub-Api-Version: 2022-11-28"
+
+#define UPD_TMO        12000
+#define UPD_PROBE_TMO   2500
+#define UPD_FAST_MS     1200   /* a mirror this quick is good enough; probing more costs the user time */
+#define UPD_PROBE_BUDGET 6000  /* total spent comparing mirrors before the download starts */
+#define UPD_SMALL_CAP (8u * 1024u * 1024u)     /* API answers are kilobytes */
+#define UPD_BIG_CAP   (256u * 1024u * 1024u)   /* the asset itself */
+#define UPD_MIRRORS    5
+
+static volatile LONG g_updBusy;   /* one updater worker at a time */
+
+/* Reverse proxies for release assets: `https://<mirror>/<original-url>`. The winner is
+   decided by timing a real request, not by this order: these hosts come and go, and plain
+   github.com is frequently unreachable here, so "just download it" is not a plan. */
+static const WCHAR *const g_updMirror[UPD_MIRRORS] = {
+    L"https://gh-proxy.com/", L"https://ghfast.top/", L"https://ghproxy.net/",
+    L"https://gh.llkk.cc/", L"https://mirror.houlang.cloud/"
+};
+
+/* ---- versions ---- */
+typedef struct { int mj, mn, pt, bd; BOOL hasBd; WCHAR text[24]; } Ver;
+
+/* "1.7.4" / "v1.7.4" / "1.7.4-65-abc1234". Only three dot-separated numbers qualify, so
+   a date like 2026.11.06 or a four-part 1.2.3.4 cannot pass as a version. */
+static BOOL VerParse(const char *s, Ver *v) {
+    int part[3], n = 0;
+    if (!s) return FALSE;
+    while (*s == ' ' || *s == 'v' || *s == 'V') s++;
+    ZeroMemory(v, sizeof *v);
+    while (n < 3) {
+        int val = 0, digits = 0;
+        if (*s < '0' || *s > '9') return FALSE;
+        while (*s >= '0' && *s <= '9') {
+            if (++digits > 4) return FALSE;
+            val = val * 10 + (*s++ - '0');
+        }
+        if (val > 999) return FALSE;
+        part[n++] = val;
+        if (n < 3) { if (*s != '.') return FALSE; s++; }
     }
-    return v[0] * 10000 + v[1] * 100 + v[2];
+    if (*s == '.' && s[1] >= '0' && s[1] <= '9') return FALSE;   /* four groups: not a version */
+    v->mj = part[0]; v->mn = part[1]; v->pt = part[2];
+    if (*s == '-') {   /* rolling dev build: <version>-<build>-<hash> */
+        int val = 0, digits = 0;
+        for (s++; *s >= '0' && *s <= '9'; s++) {
+            if (++digits > 9) return FALSE;
+            val = val * 10 + (*s - '0');
+        }
+        if (digits) { v->hasBd = TRUE; v->bd = val; }
+    }
+    if (v->hasBd) wsprintfW(v->text, L"%d.%d.%d-%d", v->mj, v->mn, v->pt, v->bd);
+    else wsprintfW(v->text, L"%d.%d.%d", v->mj, v->mn, v->pt);
+    return TRUE;
 }
 
-static DWORD WINAPI UpdThread(LPVOID pp) {
-    WCHAR dir[MAX_PATH], tmp[MAX_PATH], url[220];
-    GetTempPathW(MAX_PATH, dir);
-    PathCombineW(tmp, dir, L"minidock_release.json");
-    DeleteFileW(tmp);
-    wsprintfW(url, L"https://api.github.com/repos/wang01116/MiniDock/releases/latest?_=%lu", GetTickCount());
-    HRESULT hr = URLDownloadToFileW(NULL, url, tmp, 0, NULL);
-    lstrcpyW(g_updUrl, GH_REPO L"/releases");
-    g_updNew = FALSE;
+/* First version-looking token inside a longer string: a tag `dev`, a title
+   `Development build 2.0.0-8-abc1234` or an asset name all land here. */
+static BOOL VerScan(const char *raw, Ver *v) {
+    if (!raw) return FALSE;
+    while (*raw && (*raw < '0' || *raw > '9')) raw++;
+    return *raw ? VerParse(raw, v) : FALSE;
+}
+
+/* A release beats a dev snapshot of the same version; dev builds compare by number. */
+static BOOL VerNewer(const Ver *a, const Ver *b) {
+    if (a->mj != b->mj) return a->mj > b->mj;
+    if (a->mn != b->mn) return a->mn > b->mn;
+    if (a->pt != b->pt) return a->pt > b->pt;
+    if (!a->hasBd) return b->hasBd;
+    if (!b->hasBd) return FALSE;
+    return a->bd > b->bd;
+}
+
+static void UpdCur(Ver *v) {
+    char s[24];
+    WideCharToMultiByte(CP_UTF8, 0, APPVER, -1, s, sizeof s, NULL, NULL);
+    VerParse(s, v);
+}
+
+/* ---- SHA-256 (FIPS 180-4), the only integrity check the updater trusts ---- */
+typedef struct { DWORD h[8]; BYTE b[64]; UINT w; ULONGLONG n; } Sha256;
+
+static const DWORD g_shaK[64] = {
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+};
+
+#define ROR32(x, n) (((x) >> (n)) | ((x) << (32 - (n))))
+
+static void ShaBlock(Sha256 *c, const BYTE *p) {
+    DWORD w[64], a, b, d, e, f, g, h, x;
+    for (int i = 0; i < 16; i++)
+        w[i] = ((DWORD)p[i * 4] << 24) | ((DWORD)p[i * 4 + 1] << 16) | ((DWORD)p[i * 4 + 2] << 8) | p[i * 4 + 3];
+    for (int i = 16; i < 64; i++) {
+        DWORD s0 = ROR32(w[i - 15], 7) ^ ROR32(w[i - 15], 18) ^ (w[i - 15] >> 3);
+        DWORD s1 = ROR32(w[i - 2], 17) ^ ROR32(w[i - 2], 19) ^ (w[i - 2] >> 10);
+        w[i] = w[i - 16] + s0 + w[i - 7] + s1;
+    }
+    a = c->h[0]; b = c->h[1]; x = c->h[2]; d = c->h[3];
+    e = c->h[4]; f = c->h[5]; g = c->h[6]; h = c->h[7];
+    for (int i = 0; i < 64; i++) {
+        DWORD t1 = h + (ROR32(e, 6) ^ ROR32(e, 11) ^ ROR32(e, 25)) + ((e & f) ^ (~e & g)) + g_shaK[i] + w[i];
+        DWORD t2 = (ROR32(a, 2) ^ ROR32(a, 13) ^ ROR32(a, 22)) + ((a & b) ^ (a & x) ^ (b & x));
+        h = g; g = f; f = e; e = d + t1; d = x; x = b; b = a; a = t1 + t2;
+    }
+    c->h[0] += a; c->h[1] += b; c->h[2] += x; c->h[3] += d;
+    c->h[4] += e; c->h[5] += f; c->h[6] += g; c->h[7] += h;
+}
+
+static void ShaInit(Sha256 *c) {
+    static const DWORD iv[8] = { 0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+                                 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19 };
+    for (int i = 0; i < 8; i++) c->h[i] = iv[i];
+    c->w = 0; c->n = 0;
+}
+
+static void ShaUpdate(Sha256 *c, const void *p, UINT len) {
+    const BYTE *s = (const BYTE *)p;
+    c->n += len;
+    while (len) {
+        UINT take = 64 - c->w;
+        if (take > len) take = len;
+        for (UINT i = 0; i < take; i++) c->b[c->w + i] = s[i];
+        c->w += take; s += take; len -= take;
+        if (c->w == 64) { ShaBlock(c, c->b); c->w = 0; }
+    }
+}
+
+static void ShaFinal(Sha256 *c, BYTE out[32]) {
+    ULONGLONG bits = c->n * 8;
+    BYTE tail[72];
+    UINT n = 0;
+    tail[n++] = 0x80;
+    while ((c->w + n) % 64 != 56) tail[n++] = 0;
+    for (int i = 7; i >= 0; i--) tail[n++] = (BYTE)(bits >> (i * 8));
+    c->n -= n;   /* the padding is not message length */
+    ShaUpdate(c, tail, n);
+    for (int i = 0; i < 8; i++) {
+        out[i * 4] = (BYTE)(c->h[i] >> 24); out[i * 4 + 1] = (BYTE)(c->h[i] >> 16);
+        out[i * 4 + 2] = (BYTE)(c->h[i] >> 8); out[i * 4 + 3] = (BYTE)c->h[i];
+    }
+}
+
+/* Lowercase hex, as GitHub prints digests. */
+static void ShaHex(const BYTE h[32], char out[65]) {
+    static const char *d = "0123456789abcdef";
+    for (int i = 0; i < 32; i++) { out[i * 2] = d[h[i] >> 4]; out[i * 2 + 1] = d[h[i] & 15]; }
+    out[64] = 0;
+}
+
+/* Hash a file without holding it in memory: an asset may be tens of megabytes. */
+static BOOL ShaFile(const WCHAR *path, BYTE out[32]) {
+    BYTE *buf = (BYTE *)HeapAlloc(GetProcessHeap(), 0, 65536);
+    HANDLE h = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
+                           FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL);
+    BOOL ok = buf != NULL && h != INVALID_HANDLE_VALUE;
+    Sha256 c;
+    if (ok) {
+        ShaInit(&c);
+        for (;;) {
+            DWORD got = 0;
+            if (!ReadFile(h, buf, 65536, &got, NULL)) { ok = FALSE; break; }
+            if (!got) break;
+            ShaUpdate(&c, buf, got);
+        }
+        if (ok) ShaFinal(&c, out);
+    }
+    if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
+    if (buf) HeapFree(GetProcessHeap(), 0, buf);
+    return ok;
+}
+
+/* ---- just enough JSON ----
+   The previous code looked for "tag_name" with strstr over the whole document, which reads
+   the wrong value the moment a release note quotes that word. These helpers walk the object
+   structure and skip strings, so a key is only matched at the level it belongs to. */
+static const char *JSkipStr(const char *p) {
+    if (!p || *p != '"') return NULL;
+    for (p++; *p; p++) {
+        if (*p == '\\') { if (!p[1]) return NULL; p++; continue; }
+        if (*p == '"') return p + 1;
+    }
+    return NULL;
+}
+
+static const char *JSkip(const char *p) {
+    if (!p) return NULL;
+    if (*p == '"') return JSkipStr(p);
+    if (*p == '{' || *p == '[') {
+        char open = *p, close = open == '{' ? '}' : ']';
+        int depth = 0;
+        while (*p) {
+            if (*p == '"') { p = JSkipStr(p); if (!p) return NULL; continue; }
+            if (*p == open) depth++;
+            else if (*p == close && --depth == 0) return p + 1;
+            p++;
+        }
+        return NULL;
+    }
+    while (*p && *p != ',' && *p != '}' && *p != ']') p++;
+    return p;
+}
+
+/* Value of "key" at the top level of the object at `obj`, or NULL. */
+static const char *JField(const char *obj, const char *key) {
+    size_t klen = strlen(key);
+    const char *p = obj;
+    if (!p) return NULL;
+    while (*p == ' ' || *p == '\r' || *p == '\n' || *p == '\t') p++;
+    if (*p != '{') return NULL;
+    p++;
+    for (;;) {
+        while (*p == ' ' || *p == ',' || *p == '\r' || *p == '\n' || *p == '\t') p++;
+        if (*p != '"') return NULL;
+        const char *ks = p + 1, *ke = JSkipStr(p);
+        if (!ke) return NULL;
+        int hit = (size_t)(ke - ks - 1) == klen && !strncmp(ks, key, klen);
+        p = ke;
+        while (*p == ' ' || *p == '\r' || *p == '\n' || *p == '\t') p++;
+        if (*p != ':') return NULL;
+        p++;
+        while (*p == ' ' || *p == '\r' || *p == '\n' || *p == '\t') p++;
+        if (hit) return p;
+        p = JSkip(p);
+        if (!p) return NULL;
+    }
+}
+
+static BOOL JStr(const char *v, char *out, int cap) {
+    int i = 0;
+    if (!v || *v != '"') return FALSE;
+    for (v++; *v && *v != '"'; ) {
+        char c = *v++;
+        if (c == '\\') {
+            char e = *v++;
+            if (!e) break;
+            if (e == 'u') {   /* the API sends raw UTF-8; only control chars are escaped */
+                for (int k = 0; k < 4 && *v; k++) v++;
+                c = '?';
+            } else c = e == 'n' ? '\n' : e == 't' ? '\t' : e == 'r' ? '\r' : e == 'b' ? '\b' : e == 'f' ? '\f' : e;
+        }
+        if (i < cap - 1) out[i++] = c;
+    }
+    out[i] = 0;
+    return TRUE;
+}
+
+static BOOL JBool(const char *obj, const char *key) {
+    const char *v = JField(obj, key);
+    return v && v[0] == 't';
+}
+
+static const char *JArr(const char *obj, const char *key) {
+    const char *v = JField(obj, key);
+    return v && *v == '[' ? v : NULL;
+}
+
+/* Next element of an array; advances `*it` past it. */
+static const char *JNext(const char **it) {
+    const char *p = *it;
+    while (*p == ' ' || *p == ',' || *p == '\r' || *p == '\n' || *p == '\t') p++;
+    if (*p != '{' && *p != '[' && *p != '"' && !(*p >= '0' && *p <= '9')) return NULL;
+    const char *start = p;
+    p = JSkip(p);
+    if (!p) return NULL;
+    *it = p;
+    return start;
+}
+
+static void CPYA(char *d, int cap, const char *s) {
+    int i = 0;
+    if (s) while (s[i] && i < cap - 1) { d[i] = s[i]; i++; }
+    d[i] = 0;
+}
+
+/* ---- one release ---- */
+typedef struct {
+    char tag[48], title[96], file[128], url[512], digest[72];
+    WCHAR wurl[512];   /* url as UTF-16: WinHTTP and the UI work in wide strings */
+    long long size;
+    BOOL pre;
+    Ver ver;
+} Rel;
+
+static BOOL RelParse(const char *doc, Rel *r) {
+    ZeroMemory(r, sizeof *r);
+    if (!JStr(JField(doc, "tag_name"), r->tag, sizeof r->tag)) return FALSE;
+    if (JBool(doc, "draft")) return FALSE;   /* never offered, never installed */
+    r->pre = JBool(doc, "prerelease");
+    JStr(JField(doc, "name"), r->title, sizeof r->title);
+    const char *arr = JArr(doc, "assets");
+    if (!arr) return FALSE;
+
+    int best = 0;
+    const char *it = arr + 1, *el;
+    while ((el = JNext(&it)) != NULL) {
+        char name[128], url[512];
+        if (!JStr(JField(el, "name"), name, sizeof name)) continue;
+        if (!JStr(JField(el, "browser_download_url"), url, sizeof url)) continue;
+        int len = (int)strlen(name);
+        if (len > 7 && !_stricmp(name + len - 7, ".sha256")) continue;   /* a sidecar is optional */
+        if (len < 5 || _stricmp(name + len - 4, ".exe")) continue;
+        /* Prefer the canonical name when a release carries more than one exe. */
+        int score = !_stricmp(name, "MiniDock.exe") ? 3 : !_strnicmp(name, "MiniDock", 8) ? 2 : 1;
+        if (score <= best) continue;
+        best = score;
+        r->digest[0] = 0;   /* a digest belongs to the asset it came with */
+        r->size = 0;
+        CPYA(r->file, sizeof r->file, name);
+        CPYA(r->url, sizeof r->url, url);
+        JStr(JField(el, "digest"), r->digest, sizeof r->digest);
+        const char *sz = JField(el, "size");
+        if (sz) r->size = strtoll(sz, NULL, 10);
+    }
+    if (!r->url[0]) return FALSE;
+    if (!MultiByteToWideChar(CP_UTF8, 0, r->url, -1, r->wurl, 512)) return FALSE;
+
+    /* The tag usually holds the version, but a rolling pre-release tags `dev` and keeps the
+       version in the asset name, so try all three places before giving up. */
+    if (!VerScan(r->tag, &r->ver) && !VerScan(r->file, &r->ver) && !VerScan(r->title, &r->ver)) return FALSE;
+    return TRUE;
+}
+
+/* ---- HTTP on WinHTTP ----
+   WinINet's URLDownloadToFile writes an error document to disk and reports success, so a 403
+   or a 404 used to look exactly like "this repository has no releases". WinHTTP reports the
+   status separately, applies the system proxy and can read the body without a temp file. */
+typedef BOOL (*UpdNetFn)(const WCHAR *url, DWORD cap, DWORD *status, char **body, DWORD *len);
+static BOOL UpdHttpGet(const WCHAR *url, DWORD cap, DWORD *status, char **body, DWORD *len);
+static UpdNetFn g_updNet = UpdHttpGet;   /* tests substitute this */
+
+typedef struct { HINTERNET s, c, r; } Http;
+
+static void HttpClose(Http *x) {
+    if (x->r) WinHttpCloseHandle(x->r);
+    if (x->c) WinHttpCloseHandle(x->c);
+    if (x->s) WinHttpCloseHandle(x->s);
+    x->r = x->c = x->s = NULL;
+}
+
+static BOOL HttpOpen(Http *x, const WCHAR *url, const WCHAR *hdr, int tmo) {
+    WCHAR host[256], path[3000];
+    URL_COMPONENTS uc;
+    ZeroMemory(x, sizeof *x);
+    ZeroMemory(&uc, sizeof uc);
+    uc.dwStructSize = sizeof uc;
+    uc.lpszHostName = host; uc.dwHostNameLength = 256;
+    uc.lpszUrlPath = path; uc.dwUrlPathLength = 3000;
+    if (!WinHttpCrackUrl(url, 0, 0, &uc)) return FALSE;
+    /* AUTOMATIC_PROXY honours the Windows proxy/PAC settings; older systems refuse it. */
+    x->s = WinHttpOpen(L"MiniDock-Updater", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, NULL, NULL, 0);
+    if (!x->s) x->s = WinHttpOpen(L"MiniDock-Updater", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, NULL, NULL, 0);
+    if (!x->s) return FALSE;
+    WinHttpSetTimeouts(x->s, tmo, tmo, tmo, tmo);
+    x->c = WinHttpConnect(x->s, host, (INTERNET_PORT)uc.nPort, 0);
+    if (!x->c) { HttpClose(x); return FALSE; }
+    x->r = WinHttpOpenRequest(x->c, L"GET", path, NULL, NULL, NULL,
+                              uc.nScheme == INTERNET_SCHEME_HTTPS ? WINHTTP_FLAG_SECURE : 0);
+    if (!x->r) { HttpClose(x); return FALSE; }
+    if (hdr && hdr[0])
+        WinHttpAddRequestHeaders(x->r, hdr, (DWORD)-1, WINHTTP_ADDREQ_FLAG_ADD | WINHTTP_ADDREQ_FLAG_REPLACE);
+    if (!WinHttpSendRequest(x->r, WINHTTP_NO_ADDITIONAL_HEADERS, 0, NULL, 0, 0, 0) ||
+        !WinHttpReceiveResponse(x->r, NULL)) { HttpClose(x); return FALSE; }
+    return TRUE;
+}
+
+static DWORD HttpStatus(Http *x) {
+    DWORD code = 0, len = sizeof code;
+    if (!WinHttpQueryHeaders(x->r, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+                             WINHTTP_HEADER_NAME_BY_INDEX, &code, &len, WINHTTP_NO_HEADER_INDEX)) return 0;
+    return code;
+}
+
+/* GET into memory. Returns FALSE only when the exchange failed; the status is the caller's
+   business, because 404 from /releases/latest is a normal answer, not an error. */
+static BOOL UpdHttpGet(const WCHAR *url, DWORD cap, DWORD *status, char **body, DWORD *len) {
+    Http x;
     char *buf = NULL;
-    DWORD n = 0;
-    if (SUCCEEDED(hr)) {
-        HANDLE h = CreateFileW(tmp, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    DWORD have = 0, size = 0;
+    BOOL big = FALSE;
+    *status = 0; *body = NULL; *len = 0;
+    if (!HttpOpen(&x, url, UPD_HDR, UPD_TMO)) return FALSE;
+    *status = HttpStatus(&x);
+    for (;;) {
+        DWORD avail = 0, got = 0;
+        if (!WinHttpQueryDataAvailable(x.r, &avail) || !avail) break;
+        if (have + avail > cap) { big = TRUE; break; }
+        if (have + avail > size) {
+            DWORD want = size ? size : 8192;
+            while (want < have + avail) want *= 2;
+            char *nb = buf ? (char *)HeapReAlloc(GetProcessHeap(), 0, buf, want + 1)
+                           : (char *)HeapAlloc(GetProcessHeap(), 0, want + 1);
+            if (!nb) { big = TRUE; break; }
+            buf = nb; size = want;
+        }
+        if (!WinHttpReadData(x.r, buf + have, avail, &got) || !got) break;
+        have += got;
+    }
+    HttpClose(&x);
+    if (big) { if (buf) HeapFree(GetProcessHeap(), 0, buf); return FALSE; }
+    if (!buf) buf = (char *)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, 1);
+    if (!buf) return FALSE;
+    buf[have] = 0;
+    *body = buf; *len = have;
+    return TRUE;
+}
+
+/* GET straight to a file: the asset may be large and is hashed from disk afterwards. */
+static BOOL UpdHttpGetFile(const WCHAR *url, const WCHAR *dest, DWORD cap, DWORD *status, DWORD *got) {
+    Http x;
+    HANDLE h = INVALID_HANDLE_VALUE;
+    BYTE *buf;
+    DWORD total = 0;
+    BOOL ok = FALSE;
+    *status = 0; *got = 0;
+    DeleteFileW(dest);
+    if (!HttpOpen(&x, url, NULL, UPD_TMO)) return FALSE;
+    *status = HttpStatus(&x);
+    buf = (BYTE *)HeapAlloc(GetProcessHeap(), 0, 65536);
+    if (buf && *status == 200)
+        h = CreateFileW(dest, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (buf && h != INVALID_HANDLE_VALUE) {
+        ok = TRUE;
+        while (ok) {
+            DWORD avail = 0, rd = 0, wr = 0;
+            if (!WinHttpQueryDataAvailable(x.r, &avail)) { ok = FALSE; break; }
+            if (!avail) break;
+            if (avail > 65536) avail = 65536;
+            if (!WinHttpReadData(x.r, buf, avail, &rd) || !rd) { ok = FALSE; break; }
+            if (total + rd > cap) { ok = FALSE; break; }
+            if (!WriteFile(h, buf, rd, &wr, NULL) || wr != rd) { ok = FALSE; break; }
+            total += rd;
+        }
+    }
+    if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
+    if (buf) HeapFree(GetProcessHeap(), 0, buf);
+    HttpClose(&x);
+    if (!ok) { DeleteFileW(dest); return FALSE; }
+    *got = total;
+    return TRUE;
+}
+
+/* `https://<mirror>/` + `https://github.com/...`, or the original URL for direct access. */
+static void UpdJoin(WCHAR *out, int cap, const WCHAR *base, const WCHAR *url) {
+    lstrcpynW(out, base && base[0] ? base : L"", cap);
+    lstrcpynW(out + lstrlenW(out), url, cap - lstrlenW(out));
+}
+
+static void UpdName(const WCHAR *base, WCHAR *out, int cap) {
+    const WCHAR *p = base;
+    if (!p || !p[0]) { lstrcpynW(out, L"直连 GitHub", cap); return; }
+    if (!wcsncmp(p, L"https://", 8)) p += 8;
+    lstrcpynW(out, p, cap);
+    WCHAR *slash = wcsrchr(out, L'/');
+    if (slash) *slash = 0;
+}
+
+/* Time to first byte through a mirror, in ms, or -1. The asset is read for one chunk and
+   dropped: redirects and TLS are already paid for by the response headers, so this measures
+   exactly what the download will cost to start. */
+static int UpdProbe(const WCHAR *base, const WCHAR *target) {
+    WCHAR url[1600];
+    BYTE probe[1024];
+    DWORD got = 0;
+    ULONGLONG t0;
+    int ms;
+    Http x;
+    UpdJoin(url, 1600, base, target);
+    t0 = GetTickCount64();
+    if (!HttpOpen(&x, url, NULL, UPD_PROBE_TMO)) return -1;
+    DWORD st = HttpStatus(&x);
+    BOOL ok = (st == 200 || st == 206) && WinHttpReadData(x.r, probe, sizeof probe, &got) && got > 0;
+    ms = (int)(GetTickCount64() - t0);
+    HttpClose(&x);
+    return ok ? ms : -1;
+}
+
+/* Candidates, fastest first. Probing stops at the first mirror that answers quickly enough;
+   direct github.com is always appended as the last resort, unprobed, because a probe that
+   fails is not proof that a download would. */
+static int UpdCandidates(const WCHAR *target, WCHAR cand[][64], int max) {
+    int ms[UPD_MIRRORS + 1], n = 0;
+    ULONGLONG t0 = GetTickCount64();
+    for (int i = 0; i < UPD_MIRRORS && n < max; i++) {
+        int t;
+        if (n && GetTickCount64() - t0 > UPD_PROBE_BUDGET) break;
+        t = UpdProbe(g_updMirror[i], target);
+        if (t < 0) continue;
+        lstrcpynW(cand[n], g_updMirror[i], 64);
+        ms[n++] = t;
+        if (t <= UPD_FAST_MS) break;
+    }
+    for (int i = 1; i < n; i++) {   /* insertion sort: the list is at most six long */
+        WCHAR key[64];
+        int km = ms[i], j = i - 1;
+        lstrcpynW(key, cand[i], 64);
+        while (j >= 0 && ms[j] > km) { lstrcpynW(cand[j + 1], cand[j], 64); ms[j + 1] = ms[j]; j--; }
+        lstrcpynW(cand[j + 1], key, 64);
+        ms[j + 1] = km;
+    }
+    if (n < max) { cand[n][0] = 0; n++; }
+    return n;
+}
+
+/* ---- release lookup ---- */
+static BOOL UpdNewest(const char *arr, Rel *best) {
+    const char *it = arr + 1, *el;
+    BOOL any = FALSE;
+    while ((el = JNext(&it)) != NULL) {
+        Rel r;
+        if (!RelParse(el, &r) || r.pre) continue;   /* pre-releases are not a stable upgrade */
+        if (!any || VerNewer(&r.ver, &best->ver)) { *best = r; any = TRUE; }
+    }
+    return any;
+}
+
+static BOOL UpdFetch(Rel *out, WCHAR *msg, int mcap) {
+    char *body = NULL;
+    DWORD len = 0, st = 0;
+    BOOL got = g_updNet(UPD_LATEST, UPD_SMALL_CAP, &st, &body, &len);
+
+    if (got && st == 200) {
+        BOOL ok = RelParse(body, out);
+        HeapFree(GetProcessHeap(), 0, body);
+        if (ok) return TRUE;
+        lstrcpynW(msg, L"GitHub 返回的版本信息无法解析，请稍后再试。", mcap);
+        return FALSE;
+    }
+    if (body) HeapFree(GetProcessHeap(), 0, body);
+    body = NULL;
+
+    if (!got) {
+        lstrcpynW(msg, L"检查失败：无法连接 GitHub，请检查网络后重试。", mcap);
+        return FALSE;
+    }
+    /* Anonymous GitHub API calls are capped per hour; say so instead of blaming the repo. */
+    if (st == 403 || st == 429) {
+        wsprintfW(msg, L"GitHub 接口限流（匿名请求每小时 60 次，HTTP %u），请稍后再试。", st);
+        return FALSE;
+    }
+    /* 404 on /releases/latest means "no *stable* release" — after a cleanup, or while the
+       project only publishes pre-releases. That is a state, not an error: look at the list. */
+    if (st != 404) {
+        wsprintfW(msg, L"检查失败：GitHub 返回 HTTP %u，请稍后再试。", st);
+        return FALSE;
+    }
+    if (!g_updNet(UPD_LIST, UPD_SMALL_CAP, &st, &body, &len) || st != 200) {
+        if (body) HeapFree(GetProcessHeap(), 0, body);
+        lstrcpynW(msg, L"检查失败：无法读取 GitHub 的版本列表，请稍后再试。", mcap);
+        return FALSE;
+    }
+    BOOL any = UpdNewest(body, out);
+    HeapFree(GetProcessHeap(), 0, body);
+    if (!any) {
+        lstrcpynW(msg, L"GitHub 上还没有可用的正式版本。", mcap);
+        return FALSE;
+    }
+    return TRUE;
+}
+
+/* ---- staging and swap ---- */
+static void WCAT(WCHAR *out, int cap, const WCHAR *s) {
+    int n = lstrlenW(out);
+    if (n < cap - 1) lstrcpynW(out + n, s, cap - n);
+}
+
+static BOOL WriteAnsiFile(const WCHAR *path, const WCHAR *text) {
+    int need = WideCharToMultiByte(CP_ACP, 0, text, -1, NULL, 0, NULL, NULL);
+    if (need <= 1) return FALSE;
+    char *buf = (char *)HeapAlloc(GetProcessHeap(), 0, need);
+    if (!buf) return FALSE;
+    /* A .cmd is read in the console code page, so write it in CP_ACP, not UTF-8 or UTF-16. */
+    BOOL ok = FALSE;
+    if (WideCharToMultiByte(CP_ACP, 0, text, -1, buf, need, NULL, NULL) == need) {
+        HANDLE h = CreateFileW(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
         if (h != INVALID_HANDLE_VALUE) {
-            DWORD sz = GetFileSize(h, NULL);
-            if (sz > 0 && sz < 4 * 1024 * 1024) { buf = (char *)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sz + 1); if (buf) ReadFile(h, buf, sz, &n, NULL); }
+            DWORD wr = 0;
+            ok = WriteFile(h, buf, (DWORD)(need - 1), &wr, NULL) && wr == (DWORD)(need - 1);
             CloseHandle(h);
         }
     }
-    DeleteFileW(tmp);
-    if (!buf) lstrcpyW(g_updText, L"检查失败：无法连接 GitHub，请检查网络后重试。");
-    else {
-        char *t = strstr(buf, "\"tag_name\"");
-        char tag[64] = "";
-        if (t) {
-            t = strchr(t + 10, ':');
-            if (t) { t = strchr(t, '"'); if (t) { t++; int i = 0; while (*t && *t != '"' && i < 60) tag[i++] = *t++; tag[i] = 0; } }
-        }
-        char *hu = strstr(buf, "\"html_url\"");
-        if (hu && t) {
-            hu = strchr(hu + 10, ':');
-            if (hu) { hu = strchr(hu, '"'); if (hu) { hu++; char u8[300]; int i = 0; while (*hu && *hu != '"' && i < 298) u8[i++] = *hu++; u8[i] = 0; MultiByteToWideChar(CP_UTF8, 0, u8, -1, g_updUrl, 320); } }
-        }
-        if (!tag[0]) lstrcpyW(g_updText, L"暂无已发布的版本（仓库还没有 Releases）。");
-        else {
-            WCHAR wt[64];
-            MultiByteToWideChar(CP_UTF8, 0, tag, -1, wt, 64);
-            char cur[16];
-            WideCharToMultiByte(CP_UTF8, 0, APPVER, -1, cur, 16, NULL, NULL);
-            if (VerNum(tag) > VerNum(cur)) { g_updNew = TRUE; wsprintfW(g_updText, L"发现新版本 %s（当前 " APPVER L"）。点击下面的“前往下载”。", wt); }
-            else wsprintfW(g_updText, L"已是最新版本（当前 " APPVER L"，GitHub 最新为 %s）。", wt);
-        }
-        HeapFree(GetProcessHeap(), 0, buf);
+    HeapFree(GetProcessHeap(), 0, buf);
+    if (!ok) DeleteFileW(path);
+    return ok;
+}
+
+/* Next to the exe when that folder is writable, so the swap is a move inside one volume;
+   %TEMP% otherwise (a read-only install folder, a locked profile). */
+static void UpdStagePath(WCHAR *out, int cap) {
+    WCHAR dir[MAX_PATH], probe[MAX_PATH];
+    GetModuleFileNameW(NULL, dir, MAX_PATH);
+    WCHAR *slash = wcsrchr(dir, L'\\');
+    if (slash) slash[1] = 0;
+    BOOL ok = FALSE;
+    if (dir[0]) {
+        PathCombineW(probe, dir, L"minidock-write-test.tmp");
+        HANDLE h = CreateFileW(probe, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_TEMPORARY, NULL);
+        if (h != INVALID_HANDLE_VALUE) { CloseHandle(h); DeleteFileW(probe); ok = TRUE; }
     }
+    if (!ok) GetTempPathW(MAX_PATH, dir);
+    PathCombineW(out, dir, L"MiniDock.update.exe");
+    if (cap > 0) out[cap - 1] = 0;
+}
+
+/* The swap script.
+     - waits for this process to disappear: Windows keeps a running image locked;
+     - retries the move, because an indexer or an antivirus may hold the file for a moment;
+     - starts the new exe and deletes itself. If the move never succeeds the old exe is
+       untouched and the next launch is simply the previous version.
+   No parenthesised blocks: `%n%` inside one would be expanded before the counter changes. */
+static void UpdScript(WCHAR *out, int cap, const WCHAR *stage, const WCHAR *target, const WCHAR *name) {
+    out[0] = 0;
+    WCAT(out, cap, L"@echo off\r\nsetlocal\r\nset n=0\r\n:wait\r\n");
+    WCAT(out, cap, L"tasklist /FI \"IMAGENAME eq ");
+    WCAT(out, cap, name);
+    WCAT(out, cap, L"\" 2>nul | find /I \"");
+    WCAT(out, cap, name);
+    WCAT(out, cap, L"\" >nul\r\nif errorlevel 1 goto gone\r\nping -n 2 127.0.0.1 >nul\r\n");
+    WCAT(out, cap, L"set /a n+=1\r\nif %n% geq 60 goto end\r\ngoto wait\r\n:gone\r\nset n=0\r\n:mv\r\nmove /Y \"");
+    WCAT(out, cap, stage);
+    WCAT(out, cap, L"\" \"");
+    WCAT(out, cap, target);
+    WCAT(out, cap, L"\" >nul 2>nul\r\nif not errorlevel 1 goto run\r\nset /a n+=1\r\n");
+    WCAT(out, cap, L"if %n% geq 20 goto end\r\nping -n 2 127.0.0.1 >nul\r\ngoto mv\r\n:run\r\nstart \"\" \"");
+    WCAT(out, cap, target);
+    WCAT(out, cap, L"\"\r\n:end\r\ndel \"%~f0\"\r\n");
+}
+
+/* ---- verification ----
+   The digest comes from the API answer over TLS, so a mirror cannot substitute a different
+   executable: it would have to also change api.github.com's answer. */
+enum { VER_OK, VER_SIZE, VER_HASH, VER_READ, VER_NOTEXE };
+
+static BOOL PeHeader(const WCHAR *file) {
+    char mz[2] = { 0, 0 };
+    DWORD got = 0;
+    HANDLE h = CreateFileW(file, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h == INVALID_HANDLE_VALUE) return FALSE;
+    BOOL ok = ReadFile(h, mz, 2, &got, NULL) && got == 2 && mz[0] == 'M' && mz[1] == 'Z';
+    CloseHandle(h);
+    return ok;
+}
+
+static int UpdVerify(const WCHAR *file, const Rel *r, DWORD got) {
+    BYTE h[32];
+    char hex[65];
+    if (r->size > 0 && (long long)got != r->size) return VER_SIZE;
+    if (!ShaFile(file, h)) return VER_READ;
+    ShaHex(h, hex);
+    if (r->digest[0]) {
+        const char *want = r->digest;
+        if (!_strnicmp(want, "sha256:", 7)) want += 7;
+        return _stricmp(want, hex) ? VER_HASH : VER_OK;
+    }
+    /* Assets uploaded before GitHub published digests have no anchor; a valid PE header
+       plus the API-reported size is the most that can be proven without one. */
+    return PeHeader(file) ? VER_OK : VER_NOTEXE;
+}
+
+/* Download through the first candidate whose bytes match the release, and only then move it
+   into place. A mirror that answers quickly but serves the wrong file loses to the next one
+   instead of aborting the update. */
+static BOOL UpdStage(const Rel *rel, WCHAR *stage, int scap, WCHAR *via, int vcap, WCHAR *msg, int mcap) {
+    WCHAR part[MAX_PATH], cand[UPD_MIRRORS + 1][64], url[1600];
+    int nc, rc = VER_OK, reached = 0;
+    UpdStagePath(stage, scap);
+    lstrcpynW(part, stage, MAX_PATH);
+    WCAT(part, MAX_PATH, L".part");
+    nc = UpdCandidates(rel->wurl, cand, UPD_MIRRORS + 1);
+    for (int i = 0; i < nc; i++) {
+        DWORD st = 0, got = 0;
+        UpdJoin(url, 1600, cand[i], rel->wurl);
+        if (!UpdHttpGetFile(url, part, UPD_BIG_CAP, &st, &got) || st != 200) continue;
+        reached++;
+        rc = UpdVerify(part, rel, got);
+        if (rc == VER_OK) {
+            DeleteFileW(stage);
+            if (MoveFileExW(part, stage, MOVEFILE_REPLACE_EXISTING)) {
+                UpdName(cand[i], via, vcap);
+                return TRUE;
+            }
+        }
+        DeleteFileW(part);
+    }
+    if (!reached) lstrcpynW(msg, L"下载失败：所有下载通道都不可用，请检查网络。", mcap);
+    else if (rc == VER_HASH) lstrcpynW(msg, L"下载失败：SHA-256 与发布信息不一致，已放弃覆盖。", mcap);
+    else if (rc == VER_SIZE) lstrcpynW(msg, L"下载失败：文件不完整，已放弃覆盖。", mcap);
+    else if (rc == VER_NOTEXE) lstrcpynW(msg, L"下载失败：得到的文件不是可执行程序。", mcap);
+    else lstrcpynW(msg, L"下载失败：无法读取下载的文件。", mcap);
+    return FALSE;
+}
+
+/* ---- worker ---- */
+enum { UPD_CHECK = 1, UPD_DOWNLOAD = 2 };
+
+static DWORD WINAPI UpdThread(LPVOID p) {
+    int mode = (int)(INT_PTR)p;
+    WCHAR msg[220];
+    Rel rel;
+    Ver cur;
+    msg[0] = 0;
+    g_updNew = FALSE;
+
+    /* on failure msg already holds the reason */
+    if (UpdFetch(&rel, msg, 220)) {
+        UpdCur(&cur);
+        if (!VerNewer(&rel.ver, &cur)) {
+            wsprintfW(msg, L"已是最新版本（当前 " APPVER L"）。");
+        } else if (mode == UPD_CHECK) {
+            g_updNew = TRUE;
+            wsprintfW(msg, L"发现新版本 %s（当前 " APPVER L"）。点击“下载并校验更新”。", rel.ver.text);
+        } else {
+            WCHAR stage[MAX_PATH], via[64];
+            if (UpdStage(&rel, stage, MAX_PATH, via, 64, msg, 220)) {
+                lstrcpynW(g_updStage, stage, MAX_PATH);
+                g_updReady = TRUE;
+                g_updNew = TRUE;
+                wsprintfW(msg, L"已下载 %s 并通过 SHA-256 校验（%s），点击“重启并完成更新”。", rel.ver.text, via);
+            }
+        }
+    }
+    if (msg[0]) lstrcpynW(g_updText, msg, 220);
     InterlockedExchange(&g_updBusy, 0);
     if (g_hwnd) PostMessageW(g_hwnd, WM_APP_UPD, g_updAuto, 0);
     return 0;
 }
 
-static void StartUpdateCheck(BOOL autoMode) {
+static void StartUpdate(const WCHAR *first, int mode) {
     if (InterlockedCompareExchange(&g_updBusy, 1, 0) != 0) return;
+    lstrcpynW(g_updText, first, 220);
+    HANDLE t = CreateThread(NULL, 0, UpdThread, (LPVOID)(INT_PTR)mode, 0, NULL);
+    if (t) CloseHandle(t);
+    else InterlockedExchange(&g_updBusy, 0);
+}
+
+static void StartUpdateCheck(BOOL autoMode) {
     g_updAuto = autoMode;
-    lstrcpyW(g_updText, L"正在检查更新…");
-    HANDLE t = CreateThread(NULL, 0, UpdThread, NULL, 0, NULL);
-    if (t) CloseHandle(t); else InterlockedExchange(&g_updBusy, 0);
+    StartUpdate(L"正在检查更新…", UPD_CHECK);
+}
+
+static void StartUpdateDownload(void) {
+    g_updAuto = FALSE;
+    StartUpdate(L"正在测速选择下载通道…", UPD_DOWNLOAD);
+}
+
+/* ---- swap and restart ---- */
+static BOOL ApplyUpdate(void) {
+    WCHAR target[MAX_PATH], script[MAX_PATH], tmp[MAX_PATH], body[2400], cmd[MAX_PATH + 32], name[64];
+    const WCHAR *slash;
+    STARTUPINFOW si;
+    PROCESS_INFORMATION pi;
+
+    if (g_updBusy) {
+        lstrcpynW(g_updText, L"正在检查或下载更新，请稍候。", 220);
+        return FALSE;
+    }
+    if (!g_updReady) {
+        lstrcpynW(g_updText, L"还没有下载好的更新，请先点击“下载并校验更新”。", 220);
+        return FALSE;
+    }
+    if (GetFileAttributesW(g_updStage) == INVALID_FILE_ATTRIBUTES) {
+        g_updReady = FALSE;
+        lstrcpynW(g_updText, L"更新文件已不在原位，请重新下载。", 220);
+        return FALSE;
+    }
+    GetModuleFileNameW(NULL, target, MAX_PATH);
+    slash = wcsrchr(target, L'\\');
+    lstrcpynW(name, slash ? slash + 1 : target, 64);
+    GetTempPathW(MAX_PATH, tmp);
+    PathCombineW(script, tmp, L"minidock-update.cmd");
+    UpdScript(body, 2400, g_updStage, target, name);
+    if (!WriteAnsiFile(script, body)) {
+        lstrcpynW(g_updText, L"无法写入更新脚本，请检查临时目录权限。", 220);
+        return FALSE;
+    }
+    wsprintfW(cmd, L"cmd.exe /C \"\"%s\"\"", script);
+    ZeroMemory(&si, sizeof si);
+    si.cb = sizeof si;
+    ZeroMemory(&pi, sizeof pi);
+    if (!CreateProcessW(NULL, cmd, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
+        DeleteFileW(script);
+        lstrcpynW(g_updText, L"无法启动更新进程，请稍后重试。", 220);
+        return FALSE;
+    }
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    lstrcpynW(g_updText, L"正在重启以完成更新…", 220);
+    DestroyWindow(g_hwnd);   /* the script waits for this exit, then swaps the exe */
+    return TRUE;
 }
 
 /* ======================= dock window ======================= */
