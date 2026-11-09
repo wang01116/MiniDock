@@ -1,4 +1,4 @@
-﻿/*  MiniDock 1.1 - tiny macOS-style dock for Windows (x64).  Made by Wangcy
+/*  MiniDock 1.1 - tiny macOS-style dock for Windows (x64).  Made by Wangcy
  *  Pure Win32 + GDI+ flat API; portable; config stored next to the exe.
  */
 #define UNICODE
@@ -170,6 +170,8 @@ typedef struct Item {
     struct Item *kids;
 } Item;
 
+enum { MIN_STYLE_COMPRESS, MIN_STYLE_ICON_FLY, MIN_STYLE_SMOOTH };
+
 typedef struct {
     int iconSize, zoomSize, spacing, margin, pad, hPad, radius, opacity, blur;
     int zoom, theme, dots, labels, bounce, webApp, border, bgMode;
@@ -181,7 +183,7 @@ typedef struct {
     int fanArc, fanGap, fanCut, groupFrost, groupPos, guardian, clickToggle;
     int sepGap, sepWidth, clockSec, clockWeek, dateFmt, clockOrder, clockBoldT, clockBoldD, browser, grpOpacity, grpBg, minStyle;
     int mnAuto, mnNotes, mnAdd, launchpad;
-    int wSide, wOrder, notifyW, fanBgL, fanBgD, fanFgL, fanFgD, pinMenu, multiMode, updChk, updLast, lpCols, lpRows, fanDrag, hideTaskbar, trayHide, ctrlCenter, ccEnergy, ccHotspot, resMon, toolW, wideMask, modeW, uiFrost, lpFrost, trayW, wMerge, statusBar, sbFrost, sbOpacity, sbColor, sbRadius, sbHeight, sbFollowSys, sbTopGap, sbMaxAvoid, sbFloat, sbSideGap, sbAutoHide, sbBattery, sepScale, menuFrost;
+    int wSide, wOrder, notifyW, fanBgL, fanBgD, fanFgL, fanFgD, pinMenu, multiMode, updChk, updLast, lpCols, lpRows, fanDrag, hideTaskbar, trayHide, ctrlCenter, ccEnergy, ccHotspot, resMon, toolW, wideMask, modeW, uiFrost, lpFrost, trayW, wMerge, statusBar, sbFrost, sbOpacity, sbColor, sbRadius, sbHeight, sbFollowSys, sbTopGap, sbMaxAvoid, sbFloat, sbSideGap, sbFullscreenHide, sbBattery, sepScale, menuFrost;
     int sbBorder;      /* draw the hairline frame around the top status bar */
     int grpFloat;      /* show the app groups in their own always-on-top strip (independent of the dock) */
     int hkMods, hkVk;  /* customisable summon hotkey */
@@ -201,6 +203,7 @@ typedef struct {
     int frostHold, animSpeed, fanReverse; /* configurable backdrop refresh and fly animation timing */
     int logCollect; /* opt-in diagnostic log collection; no window titles or document paths */
     int cmMerge, cmSep, cmIcon, cmRename, cmCopy, cmDock; /* per-command visibility in Dock context menus */
+    int groupRunning; /* also show grouped applications in the existing running-app section */
 } Cfg;
 
 static Cfg cfg;
@@ -211,6 +214,9 @@ typedef struct {
     HWND hwnd;
     DWORD pid;
     HANDLE process;
+    ULONGLONG processStart;
+    DWORD roleStyle, roleExStyle;
+    BOOL roleKnown;
 } TrayApp;
 static TrayApp g_trayApps[MAXTRAYAPPS];
 static int g_ntrayApps;
@@ -352,6 +358,8 @@ static void ShowFan(int idx);
 static void ShowNote(void);
 static void ToggleWindowItem(int i);
 static void ToggleWindowIdx(HWND w, int idx);
+static void ActivateDockWindow(HWND w, int idx);
+static BOOL ActivateRunningItem(int i);
 static void ShowLaunchpad(void);
 static void ShowCalendar(void);
 static void ShowNotifyList(void);
@@ -462,7 +470,7 @@ static const struct { const WCHAR *k; int *p; } g_tab[] = {
     { L"Zoom", &cfg.zoom }, { L"Theme", &cfg.theme }, { L"Dots", &cfg.dots }, { L"Labels", &cfg.labels },
     { L"Bounce", &cfg.bounce }, { L"WebAppMode", &cfg.webApp }, { L"Border", &cfg.border }, { L"BgMode", &cfg.bgMode },
     { L"Mode", &cfg.mode }, { L"Reserve", &cfg.reserve }, { L"Edge", &cfg.edge }, { L"Monitor", &cfg.monitor },
-    { L"Preview", &cfg.preview }, { L"ShowRunning", &cfg.showRunning }, { L"Lock", &cfg.lock }, { L"Hotkey", &cfg.hotkey },
+    { L"Preview", &cfg.preview }, { L"ShowRunning", &cfg.showRunning }, { L"ShowGroupRunning", &cfg.groupRunning }, { L"Lock", &cfg.lock }, { L"Hotkey", &cfg.hotkey },
     { L"DotStyle", &cfg.dotStyle }, { L"PlateMode", &cfg.plateMode }, { L"PlateTheme", &cfg.plateTheme }, { L"PlateOpacity", &cfg.plateOpacity },
     { L"PlateRadius", &cfg.plateRadius }, { L"BgColor1", &cfg.bgColor1 }, { L"BgColor2", &cfg.bgColor2 }, { L"BgColor3", &cfg.bgColor3 },
     { L"AccentTone", &cfg.accentTone }, { L"Reflect", &cfg.reflect }, { L"Clock", &cfg.clock }, { L"FolderFan", &cfg.folderFan },
@@ -478,7 +486,7 @@ static const struct { const WCHAR *k; int *p; } g_tab[] = {
     { L"GrpOpacity", &cfg.grpOpacity }, { L"GrpBg", &cfg.grpBg }, { L"MinStyle", &cfg.minStyle }, { L"MnAuto", &cfg.mnAuto }, { L"MnNotes", &cfg.mnNotes },
     { L"MnAdd", &cfg.mnAdd }, { L"Launchpad", &cfg.launchpad },
     { L"WSide", &cfg.wSide }, { L"WOrder", &cfg.wOrder }, { L"NotifyW", &cfg.notifyW }, { L"FanBgL", &cfg.fanBgL }, { L"FanBgD", &cfg.fanBgD },
-    { L"FanFgL", &cfg.fanFgL }, { L"FanFgD", &cfg.fanFgD }, { L"PinMenu", &cfg.pinMenu }, { L"MultiMode", &cfg.multiMode }, { L"UpdChk", &cfg.updChk }, { L"UpdLast", &cfg.updLast }, { L"LpCols", &cfg.lpCols }, { L"LpRows", &cfg.lpRows }, { L"FanDrag", &cfg.fanDrag }, { L"TrayHide", &cfg.trayHide }, { L"CtrlCenter", &cfg.ctrlCenter }, { L"CcEnergy", &cfg.ccEnergy }, { L"CcHotspot", &cfg.ccHotspot }, { L"ResMon", &cfg.resMon }, { L"ToolW", &cfg.toolW }, { L"WideMask", &cfg.wideMask }, { L"ModeW", &cfg.modeW }, { L"UiFrost", &cfg.uiFrost }, { L"LpFrost", &cfg.lpFrost }, { L"TrayW", &cfg.trayW }, { L"WMerge", &cfg.wMerge }, { L"StatusBar", &cfg.statusBar }, { L"SbFrost", &cfg.sbFrost }, { L"SbOpacity", &cfg.sbOpacity }, { L"SbColor", &cfg.sbColor }, { L"SbRadius", &cfg.sbRadius }, { L"SbHeight", &cfg.sbHeight }, { L"SbFollowSys", &cfg.sbFollowSys }, { L"SbTopGap", &cfg.sbTopGap }, { L"SbMaxAvoid", &cfg.sbMaxAvoid }, { L"SbFloat", &cfg.sbFloat }, { L"SbSideGap", &cfg.sbSideGap }, { L"SbAutoHide", &cfg.sbAutoHide }, { L"SbBattery", &cfg.sbBattery }, { L"SepScale", &cfg.sepScale }, { L"MenuFrost", &cfg.menuFrost },
+    { L"FanFgL", &cfg.fanFgL }, { L"FanFgD", &cfg.fanFgD }, { L"PinMenu", &cfg.pinMenu }, { L"MultiMode", &cfg.multiMode }, { L"UpdChk", &cfg.updChk }, { L"UpdLast", &cfg.updLast }, { L"LpCols", &cfg.lpCols }, { L"LpRows", &cfg.lpRows }, { L"FanDrag", &cfg.fanDrag }, { L"TrayHide", &cfg.trayHide }, { L"CtrlCenter", &cfg.ctrlCenter }, { L"CcEnergy", &cfg.ccEnergy }, { L"CcHotspot", &cfg.ccHotspot }, { L"ResMon", &cfg.resMon }, { L"ToolW", &cfg.toolW }, { L"WideMask", &cfg.wideMask }, { L"ModeW", &cfg.modeW }, { L"UiFrost", &cfg.uiFrost }, { L"LpFrost", &cfg.lpFrost }, { L"TrayW", &cfg.trayW }, { L"WMerge", &cfg.wMerge }, { L"StatusBar", &cfg.statusBar }, { L"SbFrost", &cfg.sbFrost }, { L"SbOpacity", &cfg.sbOpacity }, { L"SbColor", &cfg.sbColor }, { L"SbRadius", &cfg.sbRadius }, { L"SbHeight", &cfg.sbHeight }, { L"SbFollowSys", &cfg.sbFollowSys }, { L"SbTopGap", &cfg.sbTopGap }, { L"SbMaxAvoid", &cfg.sbMaxAvoid }, { L"SbFloat", &cfg.sbFloat }, { L"SbSideGap", &cfg.sbSideGap }, { L"SbFullscreenHide", &cfg.sbFullscreenHide }, { L"SbBattery", &cfg.sbBattery }, { L"SepScale", &cfg.sepScale }, { L"MenuFrost", &cfg.menuFrost },
     { L"SbBorder", &cfg.sbBorder }, { L"GrpFloat", &cfg.grpFloat },
     { L"HkMods", &cfg.hkMods }, { L"HkVk", &cfg.hkVk }, { L"GameGuard", &cfg.gameGuard }, { L"GameAuto", &cfg.gameAuto },
     { L"CmMerge", &cfg.cmMerge }, { L"CmSep", &cfg.cmSep }, { L"CmIcon", &cfg.cmIcon }, { L"CmRename", &cfg.cmRename }, { L"CmCopy", &cfg.cmCopy }, { L"CmDock", &cfg.cmDock },
@@ -493,13 +501,14 @@ static void DefaultCfg(void) {
     cfg.radius = Sc(18); cfg.opacity = 60; cfg.blur = 6;
     cfg.zoom = 1; cfg.theme = 0; cfg.dots = 1; cfg.labels = 1; cfg.bounce = 1; cfg.webApp = 1; cfg.border = 1; cfg.bgMode = 2;
     cfg.mode = 0; cfg.reserve = 0; cfg.edge = 0; cfg.monitor = 0; cfg.preview = 1; cfg.showRunning = 1; cfg.lock = 0; cfg.hotkey = 1;
+    cfg.groupRunning = 0;
     cfg.dotStyle = 0; cfg.plateMode = 0; cfg.plateTheme = 2; cfg.plateOpacity = 100; cfg.plateRadius = 22; cfg.bgColor1 = -1; cfg.bgColor2 = -1; cfg.bgColor3 = -1; cfg.accentTone = 0;
     cfg.reflect = 0; cfg.clock = 0; cfg.folderFan = 1; cfg.minAnim = 1; cfg.notes = 0; cfg.uiTheme = 2; cfg.menuTheme = 2;
     cfg.borderColor = -1; cfg.borderWidth = 1; cfg.sepColor = -1; cfg.dotColor = -1; cfg.gradAngle = 90; cfg.gradA1 = 100; cfg.gradA2 = 100; cfg.gradA3 = 100;
     cfg.clockShow = 0; cfg.clockColLight = -1; cfg.clockColDark = -1; cfg.reflSize = 38; cfg.reflGap = 3; cfg.reflOpacity = 30;
     cfg.fanArc = 40; cfg.fanGap = 9; cfg.fanCut = 0; cfg.groupFrost = 1; cfg.groupPos = 0; cfg.guardian = 1; cfg.clickToggle = 1;
     cfg.sepGap = Sc(4); cfg.sepWidth = 2; cfg.clockSec = 0; cfg.clockWeek = 1; cfg.dateFmt = 0; cfg.clockOrder = 0; cfg.clockBoldT = 1; cfg.clockBoldD = 0;
-    cfg.browser = 0; cfg.grpOpacity = 94; cfg.grpBg = -1; cfg.minStyle = 0; cfg.mnAuto = 1; cfg.mnNotes = 1; cfg.mnAdd = 1;
+    cfg.browser = 0; cfg.grpOpacity = 94; cfg.grpBg = -1; cfg.minStyle = MIN_STYLE_COMPRESS; cfg.mnAuto = 1; cfg.mnNotes = 1; cfg.mnAdd = 1;
     cfg.launchpad = 0; cfg.wSide = 0; cfg.wOrder = 0; cfg.notifyW = 0; cfg.fanBgL = -1; cfg.fanBgD = -1; cfg.fanFgL = -1; cfg.fanFgD = -1;
     cfg.pinMenu = 0; cfg.multiMode = 0; cfg.updChk = 1; cfg.updLast = 0; cfg.lpCols = 7; cfg.lpRows = 4; cfg.fanDrag = 1;
     cfg.hideTaskbar = 0;   /* feature removed in 1.5.5-r5: the dock never claims a taskbar button anyway */
@@ -516,7 +525,7 @@ static void DefaultCfg(void) {
     cfg.trayW = 1;
     cfg.wMerge = 1;
     cfg.statusBar = 0; cfg.sbBattery = 1; cfg.sbFrost = 1; cfg.sbOpacity = 88; cfg.sbColor = -1; cfg.sbRadius = 10; cfg.sbHeight = 32; cfg.sbFollowSys = 1; cfg.sbTopGap = 0;
-    cfg.sbMaxAvoid = 0; cfg.sbFloat = 0; cfg.sbSideGap = 12; cfg.sbAutoHide = 0;
+    cfg.sbMaxAvoid = 0; cfg.sbFloat = 0; cfg.sbSideGap = 12; cfg.sbFullscreenHide = 1;
     cfg.sbBorder = 1; cfg.grpFloat = 0;
     cfg.hkMods = MOD_CONTROL | MOD_ALT; cfg.hkVk = 'D';
     cfg.gameGuard = 0; cfg.gameAuto = 1; cfg.lpTabs = 1; cfg.lpOpacity = 88;
@@ -720,6 +729,7 @@ static void LoadConfig(void) {
     LoadTrayApps();
     if ((int)GetPrivateProfileIntW(L"Settings", L"BgMode", -1, g_ini) < 0) cfg.bgMode = GetPrivateProfileIntW(L"Settings", L"Frost", 1, g_ini) ? 2 : 0;
     for (int i = 0; i < NTAB; i++) *g_tab[i].p = (int)GetPrivateProfileIntW(L"Settings", g_tab[i].k, *g_tab[i].p, g_ini);
+    if (cfg.minStyle < MIN_STYLE_COMPRESS || cfg.minStyle > MIN_STYLE_SMOOTH) cfg.minStyle = MIN_STYLE_COMPRESS;
     if (cfg.bgMode < 0 || cfg.bgMode > 2) cfg.bgMode = 2;
     if (cfg.opacity < 0) cfg.opacity = 0;
     GetPrivateProfileStringW(L"Notes", L"Dir", L"", g_noteDir, MAX_PATH, g_ini);
@@ -1900,6 +1910,15 @@ static void SaveNow(void) {
         wsprintfW(k, L"Class%d=", i); WCat(&w, k); WCat(&w, g_trayApps[i].cls); WCat(&w, L"\r\n");
         wsprintfW(k, L"Title%d=", i); WCat(&w, k); WCat(&w, g_trayApps[i].title); WCat(&w, L"\r\n");
         wsprintfW(k, L"Name%d=", i); WCat(&w, k); WCat(&w, g_trayApps[i].name); WCat(&w, L"\r\n");
+        WCHAR identity[192];
+        _snwprintf(identity, 191, L"Window%d=%llu\r\nPid%d=%lu\r\nStart%d=%llu\r\n", i,
+                   (unsigned long long)(UINT_PTR)g_trayApps[i].hwnd, i, g_trayApps[i].pid,
+                   i, (unsigned long long)g_trayApps[i].processStart);
+        identity[191] = 0; WCat(&w, identity);
+        if (g_trayApps[i].roleKnown) {
+            _snwprintf(identity, 191, L"Style%d=%lu\r\nExStyle%d=%lu\r\n", i, g_trayApps[i].roleStyle, i, g_trayApps[i].roleExStyle);
+            identity[191] = 0; WCat(&w, identity);
+        }
     }
     WCHAR tmp[MAX_PATH + 8];
     lstrcpyW(tmp, g_ini);
@@ -2481,7 +2500,7 @@ static BOOL UpdateFrost(void) {
 /* ======================= running apps ======================= */
 static WCHAR g_scanEx[48][MAX_PATH];
 typedef struct { HWND h; WCHAR exe[MAX_PATH]; WCHAR title[96]; } WinRec;
-typedef struct { BOOL seen[MAXI]; int nex, nwin; WinRec win[24]; } ScanCtx;
+typedef struct { BOOL seen[MAXI]; int nex, nwin; WinRec win[24]; HWND appwin[48]; } ScanCtx;
 static int g_trashFull = -1;
 
 static BOOL ExeOfWindow(HWND h, WCHAR *out) {
@@ -2531,13 +2550,21 @@ static void LoadTrayApps(void) {
     if (count > MAXTRAYAPPS) count = MAXTRAYAPPS;
     for (int i = 0; i < count; i++) {
         TrayApp a;
-        WCHAR key[32];
+        WCHAR key[32], value[32];
         ZeroMemory(&a, sizeof a);
         wsprintfW(key, L"Path%d", i); GetPrivateProfileStringW(L"TrayApps", key, L"", a.exe, MAX_PATH, g_ini);
         wsprintfW(key, L"Class%d", i); GetPrivateProfileStringW(L"TrayApps", key, L"", a.cls, 128, g_ini);
         wsprintfW(key, L"Title%d", i); GetPrivateProfileStringW(L"TrayApps", key, L"", a.title, 256, g_ini);
         wsprintfW(key, L"Name%d", i); GetPrivateProfileStringW(L"TrayApps", key, L"", a.name, 128, g_ini);
-        if (!a.exe[0] || !a.cls[0] || !a.title[0] || TrayAppIndex(a.exe) >= 0) continue;
+        wsprintfW(key, L"Window%d", i); GetPrivateProfileStringW(L"TrayApps", key, L"0", value, 32, g_ini);
+        a.hwnd = (HWND)(UINT_PTR)wcstoull(value, NULL, 10);
+        wsprintfW(key, L"Pid%d", i); a.pid = (DWORD)GetPrivateProfileIntW(L"TrayApps", key, 0, g_ini);
+        wsprintfW(key, L"Start%d", i); GetPrivateProfileStringW(L"TrayApps", key, L"0", value, 32, g_ini);
+        a.processStart = wcstoull(value, NULL, 10);
+        wsprintfW(key, L"Style%d", i); GetPrivateProfileStringW(L"TrayApps", key, L"", value, 32, g_ini);
+        if (value[0]) { a.roleKnown = TRUE; a.roleStyle = (DWORD)wcstoull(value, NULL, 10); }
+        wsprintfW(key, L"ExStyle%d", i); a.roleExStyle = (DWORD)GetPrivateProfileIntW(L"TrayApps", key, 0, g_ini);
+        if (!a.exe[0] || !a.cls[0] || TrayAppIndex(a.exe) >= 0) continue;
         if (!a.name[0]) lstrcpynW(a.name, PathFindFileNameW(a.exe), 128);
         g_trayApps[g_ntrayApps++] = a;
     }
@@ -2552,6 +2579,31 @@ static BOOL TrayProcessAlive(const TrayApp *a) {
     return a->process && WaitForSingleObject(a->process, 0) == WAIT_TIMEOUT;
 }
 
+static ULONGLONG TrayProcessStart(HANDLE process) {
+    FILETIME birth, exitTime, kernel, user;
+    if (!GetProcessTimes(process, &birth, &exitTime, &kernel, &user)) return 0;
+    return ((ULONGLONG)birth.dwHighDateTime << 32) | birth.dwLowDateTime;
+}
+
+#define TRAY_ROLE_STYLE (WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX)
+#define TRAY_ROLE_EXSTYLE (WS_EX_APPWINDOW | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE)
+
+static BOOL RestoreTrayIdentity(TrayApp *app) {
+    if (!app->hwnd || !app->pid || !app->processStart || !IsWindow(app->hwnd)) return FALSE;
+    DWORD pid = 0; GetWindowThreadProcessId(app->hwnd, &pid);
+    WCHAR cls[128], exe[MAX_PATH]; GetClassNameW(app->hwnd, cls, 128);
+    if (pid != app->pid || lstrcmpW(cls, app->cls) ||
+        !ExeOfWindow(app->hwnd, exe) || lstrcmpiW(exe, app->exe)) return FALSE;
+    HANDLE process = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!process) return FALSE;
+    if (WaitForSingleObject(process, 0) != WAIT_TIMEOUT || TrayProcessStart(process) != app->processStart) {
+        CloseHandle(process); return FALSE;
+    }
+    app->process = process;
+    TrayWindowTitle(app->hwnd, app->title);
+    return TRUE;
+}
+
 static BOOL TrayWindowValid(const TrayApp *a) {
     if (!a->hwnd || !a->process || !IsWindow(a->hwnd)) return FALSE;
     DWORD pid = 0;
@@ -2562,27 +2614,65 @@ static BOOL TrayWindowValid(const TrayApp *a) {
     return pid == a->pid && !lstrcmpW(cls, a->cls);
 }
 
+static BOOL BindTrayWindow(TrayApp *app, HWND window) {
+    DWORD pid = 0;
+    if (!IsWindow(window) || !GetWindowThreadProcessId(window, &pid)) return FALSE;
+    if (app->process && pid != app->pid) return FALSE;
+    if (!app->process) app->process = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!app->process) return FALSE;
+    app->pid = pid; app->hwnd = window;
+    app->processStart = TrayProcessStart(app->process);
+    app->roleStyle = (DWORD)GetWindowLongW(window, GWL_STYLE) & TRAY_ROLE_STYLE;
+    app->roleExStyle = (DWORD)GetWindowLongW(window, GWL_EXSTYLE) & TRAY_ROLE_EXSTYLE;
+    app->roleKnown = TRUE;
+    TrayWindowTitle(window, app->title);
+    ScheduleSave();
+    return TRUE;
+}
+
 static void FindTrayWindow(TrayApp *app) {
+    /* Titles are mutable display text (tracks, documents, unread counts). Prefer the
+       saved title only as a hint after stable HWND/process identity is unavailable. */
+    HWND fallback = NULL;
+    HWND exactWindow = NULL;
+    BOOL ambiguous = FALSE, exactAmbiguous = FALSE;
     HWND window = NULL;
     while ((window = FindWindowExW(NULL, window, app->cls, NULL)) != NULL) {
         WCHAR title[256], exe[MAX_PATH];
         TrayWindowTitle(window, title);
-        if (lstrcmpW(title, app->title)) continue;
+        BOOL exact = app->title[0] && !lstrcmpW(title, app->title);
         if (!ExeOfWindow(window, exe) || lstrcmpiW(exe, app->exe)) continue;
         DWORD pid = 0;
         GetWindowThreadProcessId(window, &pid);
         if (app->process && pid != app->pid) continue;
-        if (!app->process) app->process = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-        if (app->process) { app->pid = pid; app->hwnd = window; return; }
+        if (GetWindow(window, GW_OWNER) || (GetWindowLongW(window, GWL_STYLE) & WS_CHILD)) continue;
+        if (app->roleKnown &&
+            (((DWORD)GetWindowLongW(window, GWL_STYLE) & TRAY_ROLE_STYLE) != app->roleStyle ||
+             ((DWORD)GetWindowLongW(window, GWL_EXSTYLE) & TRAY_ROLE_EXSTYLE) != app->roleExStyle)) continue;
+        if (exact) {
+            if (exactWindow) exactAmbiguous = TRUE;
+            else exactWindow = window;
+            continue;
+        }
+        /* Hidden/minimized main windows are valid. Owned, tool, child, and untitled
+           placeholders are not; never guess if two plausible hosts remain. */
+        if (!title[0] || GetWindow(window, GW_OWNER) ||
+            (GetWindowLongW(window, GWL_EXSTYLE) & WS_EX_TOOLWINDOW) ||
+            (GetWindowLongW(window, GWL_STYLE) & WS_CHILD)) continue;
+        if (fallback) ambiguous = TRUE;
+        else fallback = window;
     }
+    if (exactWindow) { if (!exactAmbiguous) BindTrayWindow(app, exactWindow); }
+    else if (fallback && !ambiguous) BindTrayWindow(app, fallback);
 }
 
 static void RefreshTrayApps(void) {
     for (int i = 0; i < g_ntrayApps; i++) {
         TrayApp *app = &g_trayApps[i];
+        if (!app->process) RestoreTrayIdentity(app);
         if (!TrayProcessAlive(app)) {
             if (app->process) CloseHandle(app->process);
-            app->process = NULL; app->pid = 0; app->hwnd = NULL;
+            app->process = NULL; app->pid = 0; app->hwnd = NULL; app->processStart = 0;
         }
         if (!TrayWindowValid(app)) { app->hwnd = NULL; FindTrayWindow(app); }
         else if (IsWindowVisible(app->hwnd)) TrayWindowTitle(app->hwnd, app->title);
@@ -2605,11 +2695,11 @@ static void ActivateTrayApp(const Item *it) {
     TrayApp *a = &g_trayApps[index];
     if (!TrayProcessAlive(a)) { SetTimer(g_hwnd, T_SCAN, 50, NULL); return; }
     if (!TrayWindowValid(a)) {
-        MessageBoxW(g_hwnd, L"应用仍在运行，但绑定的主窗口已经销毁。请先从系统托盘打开主窗口；窗口标题改变时可在设置中重新添加。", L"托盘应用常驻", MB_OK | MB_ICONINFORMATION);
+        MessageBoxW(g_hwnd, L"应用仍在运行，但暂时无法唯一识别主窗口。请先从系统托盘打开主窗口；如果应用有多个同类窗口，可在设置中重新选择。", L"托盘应用常驻", MB_OK | MB_ICONINFORMATION);
         return;
     }
-    if (cfg.clickToggle && IsWindowVisible(a->hwnd)) {
-        ToggleWindowIdx(a->hwnd, (int)(it - items));
+    if (IsWindowVisible(a->hwnd)) {
+        ActivateDockWindow(a->hwnd, (int)(it - items));
         return;
     }
     ShowWindowAsync(a->hwnd, IsIconic(a->hwnd) ? SW_RESTORE : SW_SHOW);
@@ -2862,18 +2952,21 @@ static int ItemOfKey(DWORD key) {
 
 static HWND g_fdis[128];
 static int g_nfdis;
-static void DisableTransitions(HWND h, BOOL on) {
+static void SetTransitionsDisabled(HWND h, BOOL on, BOOL refresh) {
     int i;
     for (i = 0; i < g_nfdis; i++) if (g_fdis[i] == h) break;
     if (on) {
+        if (i < g_nfdis && !refresh) return;
+        BOOL t = TRUE;
+        /* A failed call must remain retryable. Applications may also change their own
+           DWM attributes after a scan, so restoration can explicitly refresh this value. */
+        if (FAILED(DwmSetWindowAttribute(h, 3, &t, sizeof t))) return;
         if (i < g_nfdis) return;
         if (g_nfdis >= 128) {   /* recycle the oldest entry: foreground windows keep arriving */
             if (IsWindow(g_fdis[0])) { BOOL t0 = FALSE; DwmSetWindowAttribute(g_fdis[0], 3, &t0, sizeof t0); }
             memmove(&g_fdis[0], &g_fdis[1], sizeof(HWND) * 127);
             g_nfdis = 127;
         }
-        BOOL t = TRUE;
-        DwmSetWindowAttribute(h, 3, &t, sizeof t);   /* DWMWA_TRANSITIONS_FORCEDISABLED */
         g_fdis[g_nfdis++] = h;
     } else if (i < g_nfdis) {
         BOOL t = FALSE;
@@ -2881,6 +2974,7 @@ static void DisableTransitions(HWND h, BOOL on) {
         g_fdis[i] = g_fdis[--g_nfdis];
     }
 }
+static void DisableTransitions(HWND h, BOOL on) { SetTransitionsDisabled(h, on, FALSE); }
 static void RestoreTransitions(void) { while (g_nfdis > 0) DisableTransitions(g_fdis[0], FALSE); }
 
 /* Office documents and Explorer folders can be shown one icon per window ("separate" display) */
@@ -2928,11 +3022,26 @@ static BOOL CALLBACK ScanProc(HWND h, LPARAM lp) {
     }
     for (int i = 0; i < nItems; i++) {
         if (items[i].temp || items[i].type == T_WIN) continue;
-        if (ItemMatchAny(&items[i], &wid)) { c->seen[i] = TRUE; known = TRUE; }
+        if (ItemMatchAny(&items[i], &wid)) {
+            c->seen[i] = TRUE;
+            if (items[i].type != T_GROUP || !cfg.groupRunning) known = TRUE;
+        }
     }
     if (known || sepWin || wid.host || TrayAppIndex(exe) >= 0) return TRUE;
-    for (int k = 0; k < c->nex; k++) if (!lstrcmpiW(g_scanEx[k], exe)) return TRUE;
-    if (c->nex < 48) lstrcpynW(g_scanEx[c->nex++], exe, MAX_PATH);
+    for (int k = 0; k < c->nex; k++) if (!lstrcmpiW(g_scanEx[k], exe)) {
+        HWND foreground = GetForegroundWindow();
+        if (foreground == h) c->appwin[k] = h;
+        else if (c->appwin[k] != foreground) {
+            /* Keep the last bound window when it is minimized behind another window of the same app. */
+            for (int i = 0; i < nItems; i++) if (items[i].temp && items[i].type == T_FILE &&
+                items[i].hwnd == h && !lstrcmpiW(items[i].target, exe)) { c->appwin[k] = h; break; }
+        }
+        return TRUE;
+    }
+    if (c->nex < 48) {
+        lstrcpynW(g_scanEx[c->nex], exe, MAX_PATH);
+        c->appwin[c->nex++] = h;
+    }
     return TRUE;
 }
 
@@ -2946,7 +3055,7 @@ static BOOL SyncTemp(ScanCtx *c) {
     for (int i = nItems - 1; i >= 0; i--) {
         if (!items[i].temp || items[i].type == T_SEP || items[i].type == T_WIN || items[i].type == T_TRAY) continue;
         BOOL f = FALSE;
-        for (int k = 0; k < c->nex; k++) if (!lstrcmpiW(g_scanEx[k], items[i].target)) f = TRUE;
+        for (int k = 0; k < c->nex; k++) if (!lstrcmpiW(g_scanEx[k], items[i].target)) { f = TRUE; items[i].hwnd = c->appwin[k]; break; }
         if (!f || !cfg.showRunning) { RemoveItem(i); ch = TRUE; }
     }
     if (cfg.showRunning) {
@@ -2964,6 +3073,7 @@ static BOOL SyncTemp(ScanCtx *c) {
             Item it;
             FillItem(&it, T_FILE, 0, nm, g_scanEx[k], NULL);
             it.running = TRUE;
+            it.hwnd = c->appwin[k];
             InsertItemStruct(TempEnd(), &it, TRUE);
             ch = TRUE;
         }
@@ -3092,7 +3202,12 @@ static BOOL CALLBACK ActProc(HWND h, LPARAM lp) {
     ActCtx *c = (ActCtx *)lp;
     if (!IsAppWindow(h) || h == g_hwnd) return TRUE;
     if (c->isUrl) { DWORD k; if (BoundKey(h, &k) < 0 || k != c->key) return TRUE; }
-    else { WinId w; WinIdOf(h, &w); if (!ItemMatchAny(c->it, &w)) return TRUE; }
+    else {
+        WinId w; WinIdOf(h, &w);
+        /* Runtime icons already identify the actual executable; folder/parent fallback could select a sibling app. */
+        if (c->it->temp && c->it->type == T_FILE) { if (!ItemMatchExact(c->it, &w)) return TRUE; }
+        else if (!ItemMatchAny(c->it, &w)) return TRUE;
+    }
     if (c->close) { PostMessageW(h, WM_CLOSE, 0, 0); return TRUE; }
     if (IsIconic(h)) ShowWindow(h, SW_RESTORE);
     SetForegroundWindow(h);
@@ -3464,7 +3579,10 @@ static void LaunchAsync(const Item *it) {
     if (!QueueUserWorkItem(LaunchWork, j, WT_EXECUTELONGFUNCTION)) { LaunchData(j->type, j->appmode, j->path, j->args); HeapFree(GetProcessHeap(), 0, j); }
 }
 
-static void LaunchPtr(Item *it) { LaunchAsync(it); }
+static void LaunchPtr(Item *it) {
+    if (HasWinKey(it) && ActivateItem(it, FALSE)) return;
+    LaunchAsync(it);
+}
 
 static void LaunchItem(int i, BOOL force) {
     if (i < 0 || i >= nItems) return;
@@ -3473,12 +3591,17 @@ static void LaunchItem(int i, BOOL force) {
     if (it->type == T_SEP) return;
     if (it->type == T_TRAY) { ActivateTrayApp(it); return; }
     if (it->type == T_WIN) { ToggleWindowItem(i); return; }
+    if (it->temp && it->type == T_FILE && !force) {
+        /* A running-app icon represents an existing window, not an EXE launch. */
+        if (!ActivateRunningItem(i)) SetTimer(g_hwnd, T_SCAN, 50, NULL);
+        return;
+    }
     if (it->type == T_GROUP) { if (GetTickCount() - g_popupClosedTick > 350) ShowGroup(i); return; }
     if (it->type == T_NOTE) { ShowNote(); return; }
     if (it->type == T_FILE && !lstrcmpW(it->path, L"mdock:launchpad")) { if (GetTickCount() - g_popupClosedTick > 350) ShowLaunchpad(); return; }
     if (it->type == T_FOLDER && cfg.folderFan && !force) { if (GetTickCount() - g_popupClosedTick > 350) ShowFan(i); return; }
-    if ((HasWinKey(it) || (it->type == T_URL && it->appmode)) && it->running && !force) {
-        if (cfg.clickToggle) { if (ToggleApp(it)) return; }
+    if ((HasWinKey(it) || (it->type == T_URL && it->appmode)) && !force) {
+        if (cfg.clickToggle || cfg.minAnim) { if (ToggleApp(it)) return; }
         else if (ActivateItem(it, FALSE)) return;
     }
     if ((HasWinKey(it) || (it->type == T_URL && it->appmode)) && !force && RevealHiddenWindow(it)) {
@@ -4948,7 +5071,7 @@ static LRESULT CALLBACK GrpProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         if (GetCapture() == h) ReleaseCapture();
         if (c->plusDown) { c->plusDown = FALSE; if (k == c->g->nk) GrpPlus(c, h); }
         else if (was) { BuildGroupIcon(c->g); ScheduleSave(); Kick(); GrpDraw(c, h); }
-        else if (dk >= 0 && k == dk) { LaunchAsync(&c->g->kids[k]); c->done = 1; }
+        else if (dk >= 0 && k == dk) { LaunchPtr(&c->g->kids[k]); c->done = 1; }
         else if (k < 0 && y > SHM && y < SHM + c->titleH + 4 && x > SHM && x < SHM + c->W) {
             WCHAR nm[128];
             lstrcpynW(nm, c->g->name, 128);
@@ -5027,7 +5150,7 @@ static void ShowGroupMenu(GrpCtx *c, HWND h, int k) {
     c->inMenu = 1;
     int r = ShowMenu(it, n, p.x, p.y);
     c->inMenu = 0;
-    if (r == 1 && k >= 0) { LaunchAsync(&c->g->kids[k]); c->done = 1; }
+    if (r == 1 && k >= 0) { LaunchPtr(&c->g->kids[k]); c->done = 1; }
     else if (r == 2 && k >= 0) { ExtractKid(c->gi, k); GrpRelayout(c, h); }
     else if (r == 3 && k >= 0) {
         if (c->g->kids[k].icon) GdipDisposeImage(c->g->kids[k].icon);
@@ -7002,6 +7125,7 @@ static void GenieFrame(float t) {
 /* Restore a window for the animation. SetWindowPlacement first (it honours "restore to maximised"),
    then ShowWindow, then verify. Some windows ignore a plain SW_SHOWMAXIMIZED while they are still
    finishing their own minimise - that is what made a dock click animate but leave the window minimised. */
+static BOOL g_coverUnderRestore;   /* the snapshot already covers the restore handoff */
 static void RestoreWindowForAnimation(HWND w, BOOL max) {
     if (!w || !IsWindow(w)) return;
     if (IsIconic(w)) {
@@ -7019,15 +7143,18 @@ static void RestoreWindowForAnimation(HWND w, BOOL max) {
     }
 }
 
+extern void WgcCancelCapture(void);
 static void AnimFinish(void) {
+    if (g_animTh && g_animMode == 1) WgcCancelCapture();
     /* The real window state is committed by the caller at the correct edge of the
-       animation.  This routine only releases the hidden animation token and any
-       optional legacy DWM resources; it never restores or repositions the app HWND. */
+       animation. This routine releases the private preview/token and its resources;
+       it never restores or resizes the app HWND. */
     if (g_genieOn) GenieFree();
+    if (g_anim) ShowWindow(g_anim, SW_HIDE); /* never expose an empty popup after removing its thumbnail */
     if (g_animTh) { DwmUnregisterThumbnail(g_animTh); g_animTh = NULL; }
     if (g_anim) { DestroyWindow(g_anim); g_anim = NULL; }
     if (g_animWin && IsWindow(g_animWin)) {
-        if (g_animFade && g_animMode == 1) SetLayeredWindowAttributes(g_animWin, 0, 255, LWA_ALPHA);
+        if (g_animDirect && g_animFade && g_animMode == 1) SetLayeredWindowAttributes(g_animWin, 0, 255, LWA_ALPHA);
         /* keep WS_EX_LAYERED here: removing it repaints the window and that is the flicker at the end of the fly-out */
         if (g_flyTopmost)
             SetWindowPos(g_animWin, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
@@ -7039,7 +7166,7 @@ static void AnimFinish(void) {
 }
 
 static float AnimEase(float t) {
-    if (cfg.minStyle == 1) { float c1 = 1.05f, c3 = c1 + 1, q = t - 1; return 1 + c3 * q * q * q + c1 * q * q; }   /* phone-like: soft overshoot */
+    if (cfg.minStyle == MIN_STYLE_ICON_FLY) { float c1 = 1.05f, c3 = c1 + 1, q = t - 1; return 1 + c3 * q * q * q + c1 * q * q; }   /* phone-like: soft overshoot */
     return t < 0.5f ? 4 * t * t * t : 1 - powf(-2 * t + 2, 3) / 2;                                                  /* Mac-like: smooth in-out */
 }
 
@@ -7084,15 +7211,15 @@ static void AnimFrame(float t) {
     float cx = cx0 + (cx1 - cx0) * e, cy = cy0 + (cy1 - cy0) * e;
     if (w < 8) w = 8;
     if (h < 8) h = 8;
-    SetWindowPos(g_anim, g_hwnd, (int)(cx - w / 2 + 0.5f), (int)(cy - h / 2 + 0.5f), (int)(w + 0.5f), (int)(h + 0.5f), SWP_NOACTIVATE);   /* just below the dock */
     DWM_THUMBNAIL_PROPERTIES tp;
     ZeroMemory(&tp, sizeof tp);
     tp.dwFlags = DWM_TNP_RECTDESTINATION | DWM_TNP_OPACITY | DWM_TNP_VISIBLE;
     tp.rcDestination.right = (int)(w + 0.5f); tp.rcDestination.bottom = (int)(h + 0.5f);
-    float tt = Clampf(t, 0, 1), op = g_animMode == 0 ? (tt < 0.55f ? 1.f : 1.f - 0.85f * (tt - 0.55f) / 0.45f) : 0.35f + 0.65f * Clampf(tt * 1.8f, 0, 1);
-    tp.opacity = (BYTE)(255 * op);
+    tp.opacity = 255; /* keep the compress-into-Dock effect opaque, as with the real-window path */
     tp.fVisible = TRUE;
     DwmUpdateThumbnailProperties(g_animTh, &tp);
+    SetWindowPos(g_anim, g_hwnd, (int)(cx - w / 2 + 0.5f), (int)(cy - h / 2 + 0.5f), (int)(w + 0.5f), (int)(h + 0.5f),
+                 SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOSENDCHANGING | SWP_SHOWWINDOW);   /* show only after content is ready */
 }
 
 static int ItemOfWin(HWND h) {
@@ -7102,6 +7229,8 @@ static int ItemOfWin(HWND h) {
     if (BoundKey(h, &key) >= 0) { int i = ItemOfKey(key); if (i >= 0) return i; }
     WinId w;
     WinIdOf(h, &w);
+    if (cfg.groupRunning) for (int i = 0; i < nItems; i++)
+        if (items[i].temp && items[i].type == T_FILE && ItemMatchExact(&items[i], &w)) return i;
     for (int i = 0; i < nItems; i++) if (!items[i].temp && items[i].type != T_WIN && ItemMatchAny(&items[i], &w)) return i;
     /* an app that is only shown because it is running (temporary icon) has its icon on the dock too:
        without this the minimise animation flew to the taskbar instead of the dock (a temp icon was skipped) */
@@ -7117,7 +7246,7 @@ static BOOL WindowShownRect(HWND w, RECT *r) {
         if (!GetWindowPlacement(w, &wp)) return FALSE;
         if (wp.flags & WPF_RESTORETOMAXIMIZED) {
             MONITORINFO mi = { sizeof mi };
-            GetMonitorInfoW(MonitorFromRect(&wp.rcNormalPosition, MONITOR_DEFAULTTONEAREST), &mi);
+            GetMonitorInfoW(MonitorFromWindow(w, MONITOR_DEFAULTTONEAREST), &mi);
             *r = mi.rcWork;
             /* DWM maximised windows stick out by the resize border on all four sides */
             int fb = GetSystemMetrics(SM_CXSIZEFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER);
@@ -7126,23 +7255,51 @@ static BOOL WindowShownRect(HWND w, RECT *r) {
             if (r->top < mi.rcMonitor.top) r->top = mi.rcMonitor.top;
             if (r->right > mi.rcMonitor.right) r->right = mi.rcMonitor.right;
             if (r->bottom > mi.rcMonitor.bottom) r->bottom = mi.rcMonitor.bottom;
-        } else *r = wp.rcNormalPosition;
+        } else {
+            *r = wp.rcNormalPosition;
+            if (!(GetWindowLongW(w, GWL_EXSTYLE) & WS_EX_TOOLWINDOW)) {
+                MONITORINFO mi = { sizeof mi };
+                if (GetMonitorInfoW(MonitorFromWindow(w, MONITOR_DEFAULTTONEAREST), &mi))
+                    OffsetRect(r, mi.rcWork.left - mi.rcMonitor.left, mi.rcWork.top - mi.rcMonitor.top);
+            }
+        }
     } else GetWindowRect(w, r); /* direct HWND animation uses the outer window rect, not DWM frame bounds */
     return (r->right - r->left) >= 40 && (r->bottom - r->top) >= 40 && r->left > -20000;
 }
 
-/* mode 0: shrink the real HWND into the icon; mode 1: grow it out of the icon. */
+/* mode 0: shrink into the icon; mode 1: grow out of the icon. */
 static BOOL FlyBegin(HWND w, RECT from, RECT to, int mode, int item) {
     if (g_anim || g_animBusy || !cfg.minAnim || !w || !IsWindow(w)) return FALSE;
-    /* Keep a private, non-visible animation token so the existing animation lifecycle and
-       re-entrancy guards remain intact.  The real application HWND is what moves on screen. */
-    g_anim = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT,
+    BOOL smooth = cfg.minStyle == MIN_STYLE_SMOOTH;
+    DWORD exStyle = WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT;
+    if (smooth) exStyle |= WS_EX_TOPMOST;
+    g_anim = CreateWindowExW(exStyle,
                              CLS_ANIM, L"", WS_POPUP, 0, 0, 1, 1,
                              NULL, NULL, g_inst, NULL);
     if (!g_anim) return FALSE;
     g_animFrom = from; g_animTo = to; g_animItem = item; g_animMode = mode; g_animWin = w;
-    g_animFade = (cfg.minStyle == 1);   /* 0 = compress (real window scaling), 1 = icon fly (fade + slide) */
+    g_animFade = (cfg.minStyle == MIN_STYLE_ICON_FLY);
     g_fadeLayered = FALSE;
+    g_flyTopmost = FALSE;
+    g_animDirect = FALSE;
+    if (smooth && SUCCEEDED(DwmRegisterThumbnail(g_anim, w, &g_animTh)) && g_animTh) {
+        SIZE source = {0};
+        DWM_THUMBNAIL_PROPERTIES preview = {0};
+        preview.dwFlags = DWM_TNP_RECTDESTINATION | DWM_TNP_VISIBLE | DWM_TNP_SOURCECLIENTAREAONLY;
+        SetRect(&preview.rcDestination, 0, 0, 1, 1);
+        preview.fVisible = FALSE;
+        preview.fSourceClientAreaOnly = FALSE;
+        if (SUCCEEDED(DwmQueryThumbnailSourceSize(g_animTh, &source)) && source.cx > 1 && source.cy > 1 &&
+            SUCCEEDED(DwmUpdateThumbnailProperties(g_animTh, &preview))) {
+            if (mode == 0 && !IsIconic(w)) {
+                RECT visible;
+                if (SUCCEEDED(DwmGetWindowAttribute(w, 9, &visible, sizeof visible))) g_animFrom = visible;
+            }
+            AnimFrame(0);
+            return TRUE;
+        }
+    }
+    if (g_animTh) { DwmUnregisterThumbnail(g_animTh); g_animTh = NULL; }
     g_flyTopmost = (GetWindowLongW(w, GWL_EXSTYLE) & WS_EX_TOPMOST) == 0;
     if (g_animFade) {
         LONG ex = GetWindowLongW(w, GWL_EXSTYLE);
@@ -7154,22 +7311,41 @@ static BOOL FlyBegin(HWND w, RECT from, RECT to, int mode, int item) {
     return TRUE;
 }
 
-/* v-synced loop (DwmFlush): every frame lands on a display refresh, so nothing stutters or jumps */
+static BOOL HdrActive(void);
+extern BOOL WgcPrimeHdrCapture(HWND hwnd, int w, int h);
+extern void WgcDrainHdrCapture(void);
+
+/* Pace the private preview against DWM; timer resolution is raised only during the flight. */
 static void FlyRun(float ms) {
+    BOOL canPrime = g_animMode == 1 && !g_animDirect;
+    BOOL primed = FALSE;
     LARGE_INTEGER fq, t0, t;
     QueryPerformanceFrequency(&fq);
     QueryPerformanceCounter(&t0);
     g_animBusy = TRUE;
+    BOOL highResolution = !g_animDirect && timeBeginPeriod(1) == TIMERR_NOERROR;
     for (;;) {
         QueryPerformanceCounter(&t);
         float el = (float)((double)(t.QuadPart - t0.QuadPart) * 1000.0 / (double)fq.QuadPart) / ms;
-        if (el >= 1.f) break;
+        if (el >= 1.f || !g_anim || !IsWindow(g_animWin)) break;
         AnimFrame(el);
+        if (!g_animDirect) {
+            MSG paint;
+            while (PeekMessageW(&paint, NULL, WM_PAINT, WM_PAINT, PM_REMOVE)) DispatchMessageW(&paint);
+        }
         if (FAILED(DwmFlush())) Sleep(8);
+        /* Give the preview time to appear before queuing capture work. */
+        if (canPrime && el >= 0.10f) {
+            canPrime = FALSE;
+            primed = HdrActive() && WgcPrimeHdrCapture(g_anim,
+                g_animTo.right - g_animTo.left, g_animTo.bottom - g_animTo.top);
+        }
+        if (primed) WgcDrainHdrCapture();
     }
-    AnimFrame(1.f);   /* land exactly on the final rectangle before committing the real window state */
+    AnimFrame(1.f);   /* land exactly on the final rectangle before removing the preview */
     g_animBusy = FALSE;
-    AnimFinish();
+    if (highResolution) timeEndPeriod(1);
+    /* The caller commits the real window state before removing the covering preview. */
 }
 
 typedef struct { const Item *it; DWORD key; BOOL isUrl; HWND first; } TopCtx;
@@ -7177,16 +7353,45 @@ static BOOL CALLBACK TopProc(HWND h, LPARAM lp) {
     TopCtx *c = (TopCtx *)lp;
     if (!IsAppWindow(h) || h == g_hwnd) return TRUE;
     if (c->isUrl) { DWORD k; if (BoundKey(h, &k) < 0 || k != c->key) return TRUE; }
-    else { WinId w; WinIdOf(h, &w); if (!ItemMatchAny(c->it, &w)) return TRUE; }
+    else {
+        WinId w; WinIdOf(h, &w);
+        if (c->it->temp && c->it->type == T_FILE) { if (!ItemMatchExact(c->it, &w)) return TRUE; }
+        else if (!ItemMatchAny(c->it, &w)) return TRUE;
+    }
     c->first = h;
     return FALSE;
 }
 
-/* Restore the real window without exposing its old position, then let the HWND itself travel
-   from the Dock icon to its final rectangle.  The show/hide calls are consecutive (no message-pump
-   turn between them), preventing a one-frame flash at the old location. */
+/* A compositor restore leaves the real window minimized until the preview lands.
+   The compatibility path instead moves the real HWND from the icon while restoring it. */
 static BOOL PrepareRestoreAtIcon(HWND w, RECT icon, BOOL max, RECT *target) {
     if (!w || !IsWindow(w)) return FALSE;
+    if (!g_animDirect) {
+        /* Animate to visible bounds from the start, not the invisible resize border.
+           Retargeting an outer rect to a DWM frame after the last frame caused a snap. */
+        SIZE source = {0};
+        BOOL sourceKnown = SUCCEEDED(DwmQueryThumbnailSourceSize(g_animTh, &source));
+        if (max) {
+            MONITORINFO mi = { sizeof mi };
+            if (!GetMonitorInfoW(MonitorFromWindow(w, MONITOR_DEFAULTTONEAREST), &mi)) return FALSE;
+            *target = mi.rcWork;
+            if (!(GetWindowLongW(w, GWL_STYLE) & (WS_CAPTION | WS_THICKFRAME)) && sourceKnown &&
+                source.cx >= mi.rcMonitor.right - mi.rcMonitor.left - 2 &&
+                source.cy >= mi.rcMonitor.bottom - mi.rcMonitor.top - 2) *target = mi.rcMonitor;
+        } else {
+            if (!WindowShownRect(w, target)) return FALSE;
+            if (sourceKnown) {
+                int dx = target->right - target->left - source.cx;
+                int dy = target->bottom - target->top - source.cy;
+                if (source.cx > 1 && source.cy > 1 && dx >= 0 && dy >= 0 && dx <= Sc(64) && dy <= Sc(64)) {
+                    int left = dx / 2, bottom = left < dy ? left : dy;
+                    target->left += left; target->right -= dx - left;
+                    target->top += dy - bottom; target->bottom -= bottom;
+                }
+            }
+        }
+        return TRUE; /* leave the actual window minimized until flight ends */
+    }
     WINDOWPLACEMENT wp = { sizeof wp };
     if (!GetWindowPlacement(w, &wp)) return FALSE;
     if (max) {
@@ -7233,6 +7438,230 @@ static void CommitMinimizeKeepPlacement(HWND w, const WINDOWPLACEMENT *original)
     }
 }
 
+
+static void RestoreUnderPreview(HWND w, BOOL max) {
+    if (!w || !IsWindow(w)) return;
+    g_animBusy = TRUE;
+    SetTransitionsDisabled(w, TRUE, TRUE); /* refresh immediately before committing the restore */
+    RestoreWindowForAnimation(w, max);
+    SetForegroundWindow(w); /* activation and its non-client repaint stay under the cover */
+    DWORD_PTR ignored;
+    if (!g_coverUnderRestore) {
+        SendMessageTimeoutW(w, WM_PAINT, 0, 0, SMTO_ABORTIFHUNG | SMTO_BLOCK | SMTO_ERRORONEXIT, 40, &ignored);
+        DwmFlush(); DwmFlush(); /* retain the landed preview across the paint/activation handoff */
+    }
+    g_animBusy = FALSE;
+}
+
+/* ---- first-frame handoff: freeze the last preview frame until the restored window paints ----
+   A restored GPU window (Firefox/WebRender, Chromium, XAML) repaints its own surface from
+   black for a few frames. The DWM thumbnail mirrors that live, so keeping the preview up
+   cannot hide it. Instead the landed preview frame is copied once, shown in a no-activate
+   layered window above the restored window, and removed as soon as a tiny transparent probe
+   hole in the snapshot shows painted content again. The snapshot is freed immediately. */
+/* HDR snapshot: WGC capture + DirectComposition scRGB (hdr_snap.cpp) */
+extern BOOL HdrSnapShow(HWND src, int x, int y, int w, int h);
+extern void WgcPrewarm(void);
+extern void WgcShutdown(void);
+extern void HdrSnapDestroy(void);
+extern HWND HdrSnapWindow(void);
+extern void HdrSnapProbeInfo(int *px, int *py, int *ref, int *wx, int *wy);
+
+/* HDR output check + WGC snapshot grab (wgc_capture.c) */
+extern BOOL WgcGrabWindow(HWND hwnd, void *bits, int w, int h);
+static BOOL HdrActive(void) {
+    UINT32 npath = 0, nmode = 0;
+    if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &npath, &nmode) != ERROR_SUCCESS) return FALSE;
+    DISPLAYCONFIG_PATH_INFO *paths = (DISPLAYCONFIG_PATH_INFO *)HeapAlloc(GetProcessHeap(), 0, (SIZE_T)npath * sizeof(DISPLAYCONFIG_PATH_INFO));
+    DISPLAYCONFIG_MODE_INFO *modes = (DISPLAYCONFIG_MODE_INFO *)HeapAlloc(GetProcessHeap(), 0, (SIZE_T)nmode * sizeof(DISPLAYCONFIG_MODE_INFO));
+    BOOL hdr = FALSE;
+    if (paths && modes && QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &npath, paths, &nmode, modes, NULL) == ERROR_SUCCESS) {
+        for (UINT32 i = 0; i < npath; i++) {
+            DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO a;
+            ZeroMemory(&a, sizeof a);
+            a.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
+            a.header.size = sizeof a;
+            a.header.adapterId = paths[i].targetInfo.adapterId;
+            a.header.id = paths[i].targetInfo.id;
+            if (DisplayConfigGetDeviceInfo(&a.header) == ERROR_SUCCESS && ((a.value >> 1) & 1)) { hdr = TRUE; break; }
+        }
+    }
+    if (paths) HeapFree(GetProcessHeap(), 0, paths);
+    if (modes) HeapFree(GetProcessHeap(), 0, modes);
+    return hdr;
+}
+
+typedef struct {
+    HWND wnd;
+    HDC mem;
+    HBITMAP dib;
+    HGDIOBJ old;
+    void *bits;
+    RECT rect;
+    int probeX, probeY;   /* probe hole inside the snapshot */
+    int probeRef;         /* average luminance of that area in the frozen frame */
+    BOOL probe;
+    BOOL hdrMode;         /* snapshot is a DirectComposition HDR window (hdr_snap.cpp) */
+} SnapCtx;
+static SnapCtx g_snap;
+
+static int SnapLum(const BYTE *p) { return (p[2] * 299 + p[1] * 587 + p[0] * 114) / 1000; }
+static int SnapColorLum(COLORREF c) { return (GetRValue(c) * 299 + GetGValue(c) * 587 + GetBValue(c) * 114) / 1000; }
+
+static void SnapFree(void) {
+    if (g_snap.hdrMode) { HdrSnapDestroy(); ZeroMemory(&g_snap, sizeof g_snap); return; }
+    if (g_snap.wnd) { ShowWindow(g_snap.wnd, SW_HIDE); DestroyWindow(g_snap.wnd); }
+    if (g_snap.mem) {
+        if (g_snap.old) SelectObject(g_snap.mem, g_snap.old);
+        if (g_snap.dib) DeleteObject(g_snap.dib);
+        DeleteDC(g_snap.mem);
+    }
+    ZeroMemory(&g_snap, sizeof g_snap);
+}
+
+static BOOL SnapBegin(const RECT *r) {
+    if (!r) return FALSE;
+    int w = r->right - r->left, h = r->bottom - r->top;
+    if (w < 32 || h < 32) return FALSE;
+    SnapFree();
+    HDC screen = GetDC(NULL);
+    if (!screen) return FALSE;
+    /* HDR: show the captured HDR frame as real scRGB content via DirectComposition, so DWM
+       does not re-map an SDR snapshot and turn the window white. */
+    BOOL hdr = HdrActive();
+    if (hdr && g_anim && HdrSnapShow(g_anim, r->left, r->top, w, h)) {
+        int px = 0, py = 0, pref = 0, wx = 0, wy = 0;
+        HdrSnapProbeInfo(&px, &py, &pref, &wx, &wy);
+        g_snap.hdrMode = TRUE;
+        g_snap.wnd = HdrSnapWindow();
+        g_snap.probe = TRUE;
+        g_snap.probeX = px; g_snap.probeY = py; g_snap.probeRef = pref;
+        g_snap.rect = *r;
+        ReleaseDC(NULL, screen);
+        return TRUE;
+    }
+    HDC mem = CreateCompatibleDC(screen);
+    HBITMAP dib = NULL;
+    void *bits = NULL;
+    HGDIOBJ old = NULL;
+    HWND wnd = NULL;
+    BOOL ok = FALSE;
+    if (mem) {
+        BITMAPINFO bi;
+        ZeroMemory(&bi, sizeof bi);
+        bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        bi.bmiHeader.biWidth = w;
+        bi.bmiHeader.biHeight = -h;
+        bi.bmiHeader.biPlanes = 1;
+        bi.bmiHeader.biBitCount = 32;
+        bi.bmiHeader.biCompression = BI_RGB;
+        dib = CreateDIBSection(mem, &bi, DIB_RGB_COLORS, &bits, NULL, 0);
+    }
+    if (dib && bits) {
+        old = SelectObject(mem, dib);
+        DwmFlush();   /* the landed preview frame must be on screen before the copy */
+        BOOL grabbed = FALSE;
+        /* The GDI screen grab whitens colours on HDR outputs (same issue as normal
+           screenshots). Capture the preview window through Windows.Graphics.Capture
+           instead: it returns the SDR content the user actually sees in the flight. */
+        if (hdr && g_anim) grabbed = WgcGrabWindow(g_anim, bits, w, h);
+        if (!grabbed) {
+            BitBlt(mem, 0, 0, w, h, screen, r->left, r->top, SRCCOPY);
+            GdiFlush();
+        }
+        BYTE *b = (BYTE *)bits;
+        INT_PTR np = (INT_PTR)w * h;
+        for (INT_PTR i = 0; i < np; i++) b[i * 4 + 3] = 255;   /* the screen copy has no alpha */
+        /* bright 16x16 cell: cut a small transparent probe hole there */
+        int bx = -1, by = -1, best = 0;
+        for (int y = 8; y + 16 < h; y += 16)
+            for (int x = 8; x + 16 < w; x += 16) {
+                int sum = 0;
+                for (int yy = 0; yy < 16; yy += 4)
+                    for (int xx = 0; xx < 16; xx += 4) sum += SnapLum(b + (((INT_PTR)(y + yy) * w) + x + xx) * 4);
+                if (sum > best) { best = sum; bx = x; by = y; }
+            }
+        if (bx >= 0 && best >= 205 * 16 * 3) {   /* average cell luminance of at least ~48 */
+            int ref = 0;
+            for (int yy = 0; yy < 4; yy++)
+                for (int xx = 0; xx < 4; xx++) {
+                    BYTE *q = b + (((INT_PTR)(by + yy) * w) + bx + xx) * 4;
+                    ref += SnapLum(q);
+                    q[3] = 0;
+                }
+            g_snap.probe = TRUE;
+            g_snap.probeX = bx + 1;
+            g_snap.probeY = by + 1;
+            g_snap.probeRef = ref / 16;
+        }
+        wnd = CreateWindowExW(WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT | WS_EX_TOPMOST,
+                              CLS_ANIM, L"", WS_POPUP, r->left, r->top, w, h, NULL, NULL, g_inst, NULL);
+        if (wnd) {
+            POINT pt = { r->left, r->top }, src = { 0, 0 };
+            SIZE sz = { w, h };
+            BLENDFUNCTION bf = { AC_SRC_OVER, 0, 255, AC_SRC_ALPHA };
+            if (UpdateLayeredWindow(wnd, NULL, &pt, &sz, mem, &src, 0, &bf, ULW_ALPHA)) {
+                ShowWindow(wnd, SW_SHOWNA);
+                g_snap.wnd = wnd;
+                g_snap.mem = mem;
+                g_snap.dib = dib;
+                g_snap.old = old;
+                g_snap.bits = bits;
+                g_snap.rect = *r;
+                ok = TRUE;
+            } else DestroyWindow(wnd);
+        }
+    }
+    if (!ok) {
+        if (mem) {
+            if (dib) {
+                if (old) SelectObject(mem, old);
+                DeleteObject(dib);
+            }
+            DeleteDC(mem);
+        }
+    }
+    ReleaseDC(NULL, screen);
+    if (ok) {
+        DwmFlush();   /* make sure the snapshot is composed before the window is restored */
+            }
+    return ok;
+}
+
+static BOOL SnapPainted(void) {
+    if (!g_snap.wnd) return TRUE;
+    if (!g_snap.probe) return FALSE;
+    HDC screen = GetDC(NULL);
+    if (!screen) return TRUE;
+    int sum = 0, n = 0;
+    for (int yy = 0; yy < 4; yy += 2)
+        for (int xx = 0; xx < 4; xx += 2) {
+            COLORREF c = GetPixel(screen, g_snap.rect.left + g_snap.probeX + xx, g_snap.rect.top + g_snap.probeY + yy);
+            if (c != CLR_INVALID) { sum += SnapColorLum(c); n++; }
+        }
+    ReleaseDC(NULL, screen);
+    if (!n) return TRUE;
+    int need = g_snap.probeRef / 3;
+    if (need < 18) need = 18;
+    return (sum / n) >= need;
+}
+
+static void SnapWaitPaint(DWORD maxMs) {
+    if (!g_snap.wnd) return;
+    if (!g_snap.probe) {   /* a mostly dark frame: no reliable probe, keep the cover only briefly */
+        Sleep(120);
+        return;
+    }
+    DWORD t0 = GetTickCount();
+    for (;;) {
+        if (SnapPainted()) break;
+        if (GetTickCount() - t0 >= maxMs) break;
+        MSG m;
+        while (PeekMessageW(&m, NULL, 0, 0, PM_REMOVE)) { TranslateMessage(&m); DispatchMessageW(&m); }
+        Sleep(6);
+    }
+}
+
 /* click on a window: minimised -> restore, frontmost -> minimise, behind others -> bring to front */
 static HWND g_selfMin;
 static DWORD g_selfMinTick;
@@ -7255,14 +7684,33 @@ static void ToggleWindowIdx(HWND w, int idx) {
                 DisableTransitions(w, FALSE);
                 return;
             }
-            /* Use the actual outer rectangle captured after restore; this removes the DWM-frame
-               offset that previously made the thumbnail and the real window disagree. */
+            /* The direct path captures the restored outer rectangle; the compositor path
+               computes its visible landing rectangle before the flight begins. */
             g_animTo = target;
             BOOL fade = g_animFade;
+            BOOL compositor = !g_animDirect;
             FlyRun((float)(cfg.animSpeed < 200 ? 200 : cfg.animSpeed > 1000 ? 1000 : cfg.animSpeed));
+            /* A live thumbnail cannot hide the black frames the restored app paints while it
+               rebuilds its surface. Freeze the landed preview frame over the restored window
+               and drop it once the window has painted again. */
+            BOOL covered = FALSE;
+            g_coverUnderRestore = FALSE;
+            if (compositor) {
+                /* freeze the landed preview frame over the restored window, then drop it
+                   once the window has painted again */
+                covered = SnapBegin(&g_animTo);
+                g_coverUnderRestore = covered;
+                RestoreUnderPreview(w, max);
+            }
+            AnimFinish();
+            if (covered) {
+                SnapWaitPaint(350);
+                SnapFree();
+                g_coverUnderRestore = FALSE;
+            }
             original.length = sizeof original;
             original.showCmd = max ? SW_SHOWMAXIMIZED : SW_SHOWNOACTIVATE;
-            if (fade) {
+            if (!compositor && fade) {
                 /* maximise changes the window state, so do it only for maximised windows and while transparent;
                    a normal window is already at its final rectangle, so re-applying placement would make it jump */
                 if (max) {
@@ -7270,12 +7718,12 @@ static void ToggleWindowIdx(HWND w, int idx) {
                     SetWindowPlacement(w, &original);
                     for (int k = 1; k <= 6; k++) { SetLayeredWindowAttributes(w, 0, (BYTE)(255 * k / 6), LWA_ALPHA); Sleep(10); }
                 }
-            } else if (max) {
+            } else if (!compositor && max) {
                 /* one SetWindowPlacement does placement + maximise; a second ShowWindow(SW_MAXIMIZE)
                    resized the window again and left the black client area behind */
                 SetWindowPlacement(w, &original);
             }
-            SetForegroundWindow(w);
+            if (!compositor) SetForegroundWindow(w);
             LogEvent(L"restore-flyout-start", (DWORD)idx);
         } else {
             RestoreWindowForAnimation(w, max);
@@ -7293,9 +7741,12 @@ static void ToggleWindowIdx(HWND w, int idx) {
             if (cfg.minAnim) DisableTransitions(w, TRUE);
             g_selfMin = w; g_selfMinTick = GetTickCount(); /* suppress Explorer's competing minimize hook */
             BOOL fade = fly && g_animFade, weLayer = fly && g_fadeLayered;
+            BOOL compositor = fly && !g_animDirect;
+            if (compositor) CommitMinimizeKeepPlacement(w, havePlacement ? &original : NULL);
             if (fly) FlyRun((float)(cfg.animSpeed < 200 ? 200 : cfg.animSpeed > 1000 ? 1000 : cfg.animSpeed));
-            CommitMinimizeKeepPlacement(w, havePlacement ? &original : NULL);
-            if (fade) {   /* the window is hidden now: restore normal opacity and drop the temporary layered style */
+            if (fly) AnimFinish();
+            if (!compositor) CommitMinimizeKeepPlacement(w, havePlacement ? &original : NULL);
+            if (!compositor && fade) {   /* the window is hidden now: restore normal opacity and drop the temporary layered style */
                 SetLayeredWindowAttributes(w, 0, 255, LWA_ALPHA);
                 if (weLayer) {
                     LONG ex = GetWindowLongW(w, GWL_EXSTYLE);
@@ -7306,6 +7757,18 @@ static void ToggleWindowIdx(HWND w, int idx) {
     }
 }
 
+/* ClickToggle controls repeat-click minimization. An iconic window still gets
+   the selected restore animation whenever MinAnim is enabled. */
+static void ActivateDockWindow(HWND w, int idx) {
+    BOOL minimized = IsIconic(w);
+    if (cfg.clickToggle || (cfg.minAnim && minimized)) {
+        ToggleWindowIdx(w, idx);
+        return;
+    }
+    if (minimized) ShowWindowAsync(w, SW_RESTORE);
+    SetForegroundWindow(w);
+}
+
 static void ToggleWindowItem(int i) { if (i >= 0 && i < nItems && items[i].hwnd && IsWindow(items[i].hwnd)) ToggleWindowIdx(items[i].hwnd, i); }
 
 static BOOL ToggleApp(const Item *it) {
@@ -7314,7 +7777,28 @@ static BOOL ToggleApp(const Item *it) {
     EnumWindows(TopProc, (LPARAM)&c);
     if (!c.first) return FALSE;
     int idx = (int)(it - items);
-    ToggleWindowIdx(c.first, (idx >= 0 && idx < nItems) ? idx : ItemOfWin(c.first));
+    ActivateDockWindow(c.first, (idx >= 0 && idx < nItems) ? idx : ItemOfWin(c.first));
+    return TRUE;
+}
+
+static BOOL ActivateRunningItem(int i) {
+    Item *it = &items[i];
+    HWND window = GetForegroundWindow();
+    WinId id;
+    if (window && IsAppWindow(window)) { WinIdOf(window, &id); if (!ItemMatchExact(it, &id)) window = NULL; }
+    else window = NULL;
+    if (!window && it->hwnd && IsAppWindow(it->hwnd)) {
+        WinIdOf(it->hwnd, &id);
+        if (ItemMatchExact(it, &id)) window = it->hwnd;
+    }
+    if (!window) {
+        TopCtx c = { it, 0, FALSE, NULL };
+        EnumWindows(TopProc, (LPARAM)&c);
+        window = c.first;
+    }
+    if (!window) return FALSE;
+    it->hwnd = window;
+    ActivateDockWindow(window, i);
     return TRUE;
 }
 
@@ -7344,9 +7828,9 @@ static void CALLBACK MinProc(HWINEVENTHOOK hk, DWORD ev, HWND w, LONG idObj, LON
     IconScreenRect(idx, &icon);
     if (FlyBegin(w, r, icon, 0, idx)) {
         g_minPend = w; g_minIdx = idx; g_minRect = r; g_minTick = GetTickCount();
-        /* Cancel Explorer's competing minimise transition while the Dock overlay
-           plays.  WM_APP_MINANIM commits the real minimise after the fly-in. */
-        ShowWindow(w, SW_SHOWNOACTIVATE);
+        /* The direct fallback cancels native minimization until its flight ends.
+           A compositor preview can keep the real window minimized throughout the flight. */
+        if (g_animDirect) ShowWindow(w, SW_SHOWNOACTIVATE);
         PostMessageW(g_hwnd, WM_APP_MINANIM, 0, 0);
     } else { g_minPlacementValid = FALSE; DisableTransitions(w, FALSE); }
 }
@@ -8813,13 +9297,59 @@ static void SbGeom(int *x, int *y, int *w, int *h) {
 }
 
 static RECT g_sbR[12];   /* 0 MiniDock, 1 clock, 2 CC, 3 tray, 4 cpu, 5 battery, 6 bell, 7 wifi, 8 volume, 9 bluetooth, 10 IME, 11 focus mode */
-static BOOL g_sbGameSuppressed;
+static BOOL g_sbContentSuppressed;
+static BOOL g_sbAbDirty;
 static int g_sbHover = -1;
 static void ShowSystemMenu(void);
 static void ShowWifiPopup(void);
 static void ShowBtPopup(void);
 static void ShowVolPopup(void);
 static void ToggleIme(void);
+
+/* Status-bar policy is independent of the Dock's game mode and recorder exemptions.
+   Return 2 only for true fullscreen video/game content, 1 for a maximized window. */
+static int SbForegroundMode(void) {
+    HWND foreground = GetForegroundWindow();
+    if (!foreground || foreground == g_hwnd || foreground == g_hset || foreground == g_sb ||
+        foreground == g_lpWnd || foreground == GetDesktopWindow() || foreground == GetShellWindow() ||
+        !IsWindowVisible(foreground) || IsIconic(foreground) || GetAncestor(foreground, GA_ROOT) != foreground) return 0;
+    LONG extended = GetWindowLongW(foreground, GWL_EXSTYLE);
+    if (extended & (WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE)) return 0;
+    WCHAR cls[64]; GetClassNameW(foreground, cls, 64);
+    if (ShellChromeClass(cls)) return 0;
+    int cloaked = 0;
+    DwmGetWindowAttribute(foreground, 14, &cloaked, sizeof cloaked);
+    if (cloaked) return 0;
+    MONITORINFO monitor = { sizeof monitor };
+    if (!GetMonitorInfoW(MonitorFromWindow(foreground, MONITOR_DEFAULTTONEAREST), &monitor) ||
+        !EqualRect(&monitor.rcMonitor, &g_mi.rcMonitor)) return 0;
+    RECT frame;
+    if (FAILED(DwmGetWindowAttribute(foreground, 9, &frame, sizeof frame)) && !GetWindowRect(foreground, &frame)) return 0;
+    BOOL maximized = IsZoomed(foreground);
+    BOOL fullscreen = frame.left <= monitor.rcMonitor.left + 1 && frame.top <= monitor.rcMonitor.top + 1 &&
+        frame.right >= monitor.rcMonitor.right - 1 && frame.bottom >= monitor.rcMonitor.bottom - 1;
+    /* Maximization, including filling the monitor with an auto-hidden taskbar, is not
+       fullscreen. A true fullscreen surface also removes its normal window frame. */
+    if (GetWindowLongW(foreground, GWL_STYLE) & (WS_CAPTION | WS_THICKFRAME)) fullscreen = FALSE;
+    if (!fullscreen) return maximized ? 1 : 0;
+    WinId identity; WinIdOf(foreground, &identity);
+    const WCHAR *exe = PathFindFileNameW(identity.exe);
+    BOOL video = MediaExeName(exe) && lstrcmpiW(exe, L"applicationframehost.exe");
+    if (BrowserExeName(exe)) video = TRUE; /* only reached for a real fullscreen browser surface */
+    BOOL game = fullscreen && ShellQuns() == QUNS_D3D_;
+    LoadGames();
+    for (int i = 0; !game && i < g_ngames; i++) if (g_games[i][0] && !lstrcmpiW(exe, g_games[i])) game = TRUE;
+    if (!game) {
+        static const WCHAR *games[] = { L"League of Legends.exe", L"LeagueClientUx.exe", L"VALORANT-Win64-Shipping.exe",
+            L"dota2.exe", L"cs2.exe", L"csgo.exe", L"Overwatch.exe", L"r5apex.exe", L"TslGame.exe",
+            L"GenshinImpact.exe", L"YuanShen.exe", L"StarRail.exe", L"ZenlessZoneZero.exe", L"eldenring.exe",
+            L"gta5.exe", L"FortniteClient-Win64-Shipping.exe", L"b1-Win64-Shipping.exe" };
+        for (int i = 0; i < (int)(sizeof games / sizeof games[0]); i++) if (!lstrcmpiW(exe, games[i])) { game = TRUE; break; }
+    }
+    if (!game) game = !lstrcmpW(cls, L"UnityWndClass") || !lstrcmpW(cls, L"UnrealWindow") ||
+        !lstrcmpW(cls, L"Valve001") || !lstrcmpW(cls, L"GLFW30");
+    return video || game ? 2 : (maximized ? 1 : 0);
+}
 
 static int SbBattery(int *chg) {
     SYSTEM_POWER_STATUS ps;
@@ -8856,22 +9386,38 @@ static int SbNetState(void) {   /* 0 wifi, 1 wired, 2 offline */
 }
 
 static const WCHAR *ImeLabel(void) {
-    static WCHAR b[4];
     HWND fg = GetForegroundWindow();
     if (!fg || fg == g_hwnd || fg == g_sb) fg = GetShellWindow();
     DWORD tid = GetWindowThreadProcessId(fg, NULL);
     GUITHREADINFO gi; ZeroMemory(&gi, sizeof gi); gi.cbSize = sizeof gi;
-    if (tid && GetGUIThreadInfo(tid, &gi) && gi.hwndFocus) fg = gi.hwndFocus;
-    HKL kl = GetKeyboardLayout(tid);
-    WORD lang = LOWORD((DWORD)(ULONG_PTR)kl);
-    BOOL chinese = (lang == 0x0804 || lang == 0x0404 || lang == 0x0C04);
-    BOOL native = FALSE;
-    if (chinese && fg) {
-        HIMC imc = ImmGetContext(fg);
-        if (imc) { DWORD conv = 0, sent = 0; if (ImmGetConversionStatus(imc, &conv, &sent)) native = (conv & IME_CMODE_NATIVE) != 0; ImmReleaseContext(fg, imc); }
+    if (tid && GetGUIThreadInfo(tid, &gi) && gi.hwndFocus) {
+        fg = gi.hwndFocus;
+        tid = GetWindowThreadProcessId(fg, NULL); /* the focused child can belong to a different thread */
     }
-    lstrcpyW(b, chinese && native ? L"中" : L"EN");
-    return b;
+    HKL kl = GetKeyboardLayout(tid);
+    if (PRIMARYLANGID(LOWORD((ULONG_PTR)kl)) != LANG_CHINESE) return L"EN";
+    /* HIMC access is thread-bound. Ask the target's default IME window to read its own
+       state instead of treating a failed cross-thread ImmGetContext as English. */
+    HWND ime = fg ? ImmGetDefaultIMEWnd(fg) : NULL;
+    DWORD_PTR open = 0, conversion = 0;
+    UINT flags = SMTO_ABORTIFHUNG | SMTO_BLOCK | SMTO_ERRORONEXIT;
+    if (ime && SendMessageTimeoutW(ime, WM_IME_CONTROL, 0x0005 /* IMC_GETOPENSTATUS */, 0, flags, 20, &open)) {
+        if (!open) return L"EN";
+        if (SendMessageTimeoutW(ime, WM_IME_CONTROL, 0x0001 /* IMC_GETCONVERSIONMODE */, 0, flags, 20, &conversion))
+            return (conversion & IME_CMODE_NATIVE) ? L"中" : L"EN";
+    }
+    /* Keep an IMM fallback only for a context owned by our own UI thread. */
+    if (fg && tid == GetCurrentThreadId()) {
+        HIMC imc = ImmGetContext(fg);
+        if (imc) {
+            DWORD conv = 0, sent = 0;
+            BOOL known = ImmGetConversionStatus(imc, &conv, &sent);
+            BOOL native = ImmGetOpenStatus(imc) && (conv & IME_CMODE_NATIVE);
+            ImmReleaseContext(fg, imc);
+            if (known) return native ? L"中" : L"EN";
+        }
+    }
+    return L"IME"; /* unavailable is not evidence of English mode */
 }
 static void ToggleIme(void) {
     HWND fg = GetForegroundWindow();
@@ -9065,7 +9611,8 @@ static void SbDraw(HWND h) {
 #undef SB_RECT
 
     if (g_nnf > 0) SetTimer(h, 2, 480, NULL); else KillTimer(h, 2);   /* let the notification icons blink */
-    CanvasPresentA(&g_sbCv, h, 0, 0, 255);
+    RECT position;
+    if (GetWindowRect(h, &position)) CanvasPresentA(&g_sbCv, h, position.left, position.top, 255);
 }
 
 static void SbAnchor(int wid, int cx0, int cy0) {
@@ -9105,7 +9652,7 @@ static LRESULT CALLBACK SbProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             BOOL closable = (hit == 1 || hit == 2 || hit == 3 || hit == 4 || hit == 5 || hit == 6 || hit == 7 || hit == 8 || hit == 9 || hit == 11);
             if (closable) { n = CmAdd(it, n, 20 + hit, L"关闭此小组件", CM_RED); n = CmAdd(it, n, 0, L"", CM_SEP); }
             n = CmAdd(it, n, 1, L"状态栏设置…", 0);
-            n = CmAdd(it, n, 2, cfg.sbAutoHide ? L"智能隐藏（已开启）" : L"智能隐藏", 0);
+            n = CmAdd(it, n, 2, cfg.sbFullscreenHide ? L"全屏视频/游戏时隐藏（已开启）" : L"全屏视频/游戏时隐藏", 0);
             n = CmAdd(it, n, 3, L"关闭状态栏", CM_RED);
             if (cfg.cmMerge) n = CmAdd(it, n, 4, cfg.multiMode ? L"窗口独立显示" : L"窗口合并显示", cfg.multiMode ? CM_CHECK : 0);
             if (cfg.mnTaskMgr) n = CmAdd(it, n, 5, L"任务管理器", 0);
@@ -9114,7 +9661,7 @@ static LRESULT CALLBACK SbProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         int r = ShowMenu(it, n, p.x, p.y); gMenuOpen = FALSE;
         if (r == 10) ShellExecuteW(NULL, L"open", L"ms-settings:regionlanguage", NULL, NULL, SW_SHOWNORMAL);
         else if (r == 1) ShowSettings(30);
-        else if (r == 2) { cfg.sbAutoHide = !cfg.sbAutoHide; ScheduleSave(); SbTick(); }
+        else if (r == 2) { cfg.sbFullscreenHide = !cfg.sbFullscreenHide; ScheduleSave(); SbTick(); }
         else if (r == 3) { cfg.statusBar = 0; ApplySettings(); ScheduleSave(); SbTick(); }
         else if (r == 4) { cfg.multiMode = !cfg.multiMode; ApplySettings(); ScheduleSave(); }
         else if (r == 5) ShellExecuteW(NULL, L"open", L"taskmgr.exe", NULL, NULL, SW_SHOWNORMAL);
@@ -9146,11 +9693,13 @@ static LRESULT CALLBACK SbProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     case WM_MOUSELEAVE: if (g_sbHover != -1) { g_sbHover = -1; SbDraw(h); } return 0;
     case WM_TIMER:
         if (w == 9) KillTimer(h, 9);
-        SbDraw(h);
+        if (!g_sbContentSuppressed && IsWindowVisible(h)) SbDraw(h);
         return 0;
     case WM_APP_AB:
-        /* the shell notifies app bars when a fullscreen app starts/ends: re-apply the reservation */
-        if (w == ABN_FULLSCREENAPP && !l) { SbAppBar(FALSE); SbTick(); }
+        /* Reconcile changed Shell reservations on the existing tick. SbAppBar caches the
+           accepted rectangle so its own SETPOS notification cannot create a feedback loop. */
+        if (w == ABN_POSCHANGED) g_sbAbDirty = TRUE;
+        if (w == ABN_FULLSCREENAPP) SbTick();
         return 0;
     case WM_MOUSEACTIVATE: return MA_NOACTIVATE;
     }
@@ -9173,14 +9722,13 @@ static void SbShow(void) {
     SetupG(g_sbCv.g);
     g_sb = CreateWindowExW(WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, CLS_SB, L"", WS_POPUP, X, Y, W, H, NULL, NULL, g_inst, NULL);
     if (!g_sb) { CanvasFree(&g_sbCv); return; }
-    ShowWindow(g_sb, SW_SHOWNOACTIVATE);
     SbDraw(g_sb);
-    if (cfg.sbMaxAvoid) SbAppBar(TRUE);
     SetTimer(g_sb, 1, 300, NULL);    /* poll IME conversion changes (including Shift) with a short, low-cost refresh */
 }
 
 static void SbHide(void) {
     if (!g_sb) return;
+    SbAppBar(FALSE);
     KillTimer(g_sb, 1);
     DestroyWindow(g_sb);
     g_sb = NULL;
@@ -9188,17 +9736,28 @@ static void SbHide(void) {
 }
 
 static BOOL g_sbAbReg;
+static RECT g_sbAbRect;
+static BOOL SbHiddenTopTaskbar(void) {
+    if (cfg.taskHide != 2) return FALSE;
+    APPBARDATA taskbar = { sizeof taskbar };
+    RECT intersection;
+    return SHAppBarMessage(ABM_GETTASKBARPOS, &taskbar) && taskbar.uEdge == ABE_TOP &&
+        IntersectRect(&intersection, &taskbar.rc, &g_mi.rcMonitor);
+}
 static void SbAppBar(BOOL on) {
     if (!g_sb) return;
+    if (g_sbContentSuppressed) on = FALSE;
     APPBARDATA ab;
     ZeroMemory(&ab, sizeof ab);
     ab.cbSize = sizeof ab;
     ab.hWnd = g_sb;
+    g_sbAbDirty = FALSE;
     if (!on) {
         if (g_sbAbReg) { SHAppBarMessage(ABM_REMOVE, &ab); g_sbAbReg = FALSE; }
         return;
     }
-    if (!g_sbAbReg) {
+    BOOL fresh = !g_sbAbReg;
+    if (fresh) {
         ab.uCallbackMessage = WM_APP_AB;
         if (!SHAppBarMessage(ABM_NEW, &ab)) return;   /* retried from SbTick */
         g_sbAbReg = TRUE;
@@ -9208,48 +9767,58 @@ static void SbAppBar(BOOL on) {
     ab.uEdge = ABE_TOP;
     ab.rc = m;
     ab.rc.bottom = ab.rc.top + thick;
-    SHAppBarMessage(ABM_QUERYPOS, &ab);
-    ab.rc.bottom = ab.rc.top + thick;
-    SHAppBarMessage(ABM_SETPOS, &ab);
+    if (!SHAppBarMessage(ABM_QUERYPOS, &ab)) { SbAppBar(FALSE); return; }
+    BOOL hiddenTop = SbHiddenTopTaskbar();
+    if (hiddenTop) {
+        /* The hidden taskbar may still retain its auto-hide reveal strip. Together the
+           reveal strip and our AppBar must end at the drawn status bar's bottom edge. */
+        ab.rc.bottom = m.top + thick;
+        if (ab.rc.bottom <= ab.rc.top) { SbAppBar(FALSE); return; }
+    } else ab.rc.bottom = ab.rc.top + thick;
+    if (!fresh && EqualRect(&ab.rc, &g_sbAbRect)) return;
+    if (!SHAppBarMessage(ABM_SETPOS, &ab)) { SbAppBar(FALSE); return; }
+    g_sbAbRect = ab.rc;
     int side = cfg.sbFloat ? Sc(cfg.sbSideGap) : 0;
     int W = (ab.rc.right - ab.rc.left) - 2 * side;
-    SetWindowPos(g_sb, NULL, ab.rc.left + side, ab.rc.top + cfg.sbTopGap, W, H, SWP_NOZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    int Y = (hiddenTop ? m.top : ab.rc.top) + cfg.sbTopGap;
+    SetWindowPos(g_sb, NULL, ab.rc.left + side, Y, W, H, SWP_NOZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW);
 }
 
-static int g_sbX0 = -99999, g_sbY0 = -99999, g_sbW0 = -1, g_sbH0 = -1;
-static void SbTick(void) {   /* keep the bar in sync with cfg and suppress it together with the dock in game mode */
-    if (cfg.statusBar && GameActive()) {
-        if (g_sb && IsWindowVisible(g_sb)) ShowWindow(g_sb, SW_HIDE);
-        g_sbGameSuppressed = TRUE;
-        return;
-    }
-    if (g_sbGameSuppressed && cfg.statusBar) {
-        g_sbGameSuppressed = FALSE;
-        if (g_sb) { ShowWindow(g_sb, SW_SHOWNOACTIVATE); SbDraw(g_sb); }
-    }
+static int g_sbX0 = -99999, g_sbY0 = -99999;
+static void SbTick(void) {
     if (!cfg.statusBar) {
         if (g_sb) { SbAppBar(FALSE); SbHide(); }
+        g_sbContentSuppressed = FALSE;
         return;
     }
+    int mode = SbForegroundMode();
+    if (cfg.sbFullscreenHide && mode == 2) {
+        g_sbContentSuppressed = TRUE;
+        if (g_sb) {
+            ShowWindow(g_sb, SW_HIDE);
+            KillTimer(g_sb, 1);
+            KillTimer(g_sb, 2);
+            SbAppBar(FALSE); /* release the top work-area strip as well as hiding the pixels */
+        }
+        return;
+    }
+    BOOL restoring = g_sbContentSuppressed;
+    g_sbContentSuppressed = FALSE;
     int X, Y, W, H;
     SbGeom(&X, &Y, &W, &H);
-    if (!g_sb) { SbShow(); g_sbX0 = X; g_sbY0 = Y; g_sbW0 = W; g_sbH0 = H; return; }
-    if (g_sbCv.w != W || g_sbCv.h2 != H) { SbHide(); SbShow(); g_sbX0 = X; g_sbY0 = Y; g_sbW0 = W; g_sbH0 = H; return; }
+    if (!g_sb) { SbShow(); g_sbX0 = -99999; g_sbY0 = -99999; }
+    if (!g_sb) return;
+    if (g_sbCv.w != W || g_sbCv.h2 != H) { SbHide(); SbShow(); g_sbX0 = -99999; g_sbY0 = -99999; }
+    if (!g_sb) return;
     BOOL geoChanged = (X != g_sbX0 || Y != g_sbY0);
-    if (cfg.sbMaxAvoid && !g_sbAbReg) SbAppBar(TRUE);   /* self-heal a registration that failed earlier */
-    if (g_sbAbReg != (cfg.sbMaxAvoid != 0)) { SbAppBar(cfg.sbMaxAvoid); geoChanged = FALSE; }
-    if (cfg.sbMaxAvoid && geoChanged) SbAppBar(TRUE);
-    if (cfg.sbAutoHide) {   /* smart auto-hide: only move when the target position actually changes (no idle flicker) */
-        POINT pt;
-        GetCursorPos(&pt);
-        BOOL nv = pt.y <= g_mi.rcMonitor.top + Sc(4);
-        static int shownY = 0x7FFFFFFF;
-        int ty = nv ? Y : (Y - H - Sc(6));
-        if (ty != shownY) { SetWindowPos(g_sb, NULL, X, ty, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE); shownY = ty; }
-    } else if (geoChanged) {
+    BOOL reserve = cfg.sbMaxAvoid;
+    if (g_sbAbReg != reserve || (reserve && (geoChanged || g_sbAbDirty))) SbAppBar(reserve);
+    RECT actual;
+    if (!GetWindowRect(g_sb, &actual) || actual.left != X || actual.top != Y)
         SetWindowPos(g_sb, NULL, X, Y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-    }
-    g_sbX0 = X; g_sbY0 = Y; g_sbW0 = W; g_sbH0 = H;
+    if (!IsWindowVisible(g_sb)) ShowWindow(g_sb, SW_SHOWNOACTIVATE);
+    if (restoring) { SetTimer(g_sb, 1, 300, NULL); SbDraw(g_sb); }
+    g_sbX0 = X; g_sbY0 = Y;
 }
 
 /* ======================= launchpad: paged app grid (swipe, drag to reorder, merge into folders, custom items) ======================= */
@@ -10380,13 +10949,10 @@ static void AddTrayApp(HWND parent) {
     GetClassNameW(h, a.cls, 128);
     TrayWindowTitle(h, a.title);
     if (!a.cls[0] || !a.title[0]) return;
-    GetWindowThreadProcessId(h, &a.pid);
-    a.process = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, a.pid);
-    if (!a.process) {
+    if (!BindTrayWindow(&a, h)) {
         MessageBoxW(parent, L"无法跟踪该应用进程，请确认 Dock 与应用的运行权限一致。", L"托盘应用常驻", MB_OK | MB_ICONINFORMATION);
         return;
     }
-    a.hwnd = h;
     FileDescr(a.exe, a.name, 128);
     if (!a.name[0]) lstrcpynW(a.name, PathFindFileNameW(a.exe), 128);
     CleanName(a.name);
@@ -10714,7 +11280,7 @@ static const WCHAR *o_multi[2] = { L"合并显示（悬停预览窗口）", L"�
 static const WCHAR *o_wside[2] = { L"Dock 右侧（默认）", L"Dock 左侧" };
 static const WCHAR *o_worder[2] = { L"时间与日期在前，通知在后", L"通知在前，时间与日期在后" };
 static const WCHAR *o_browser[5] = { L"自动（Edge 优先）", L"Microsoft Edge", L"Google Chrome", L"Mozilla Firefox", L"系统默认浏览器（不使用应用窗口）" };
-static const WCHAR *o_minstyle[2] = { L"压缩飞入（类似 macOS 神奇效果）", L"图标飞入（类 iOS，非线性）" };
+static const WCHAR *o_minstyle[] = { L"经典压缩飞入", L"经典图标飞入", L"流畅压缩（支持 HDR）" };
 static const WCHAR *o_corder[2] = { L"时间在上，日期在下", L"日期在上，时间在下" };
 static const WCHAR *o_dfmt[3] = { L"2026年10月22日", L"2026/10/22", L"2026-10-22" };
 static const WCHAR *o_reflmode[2] = { L"倒影在 Dock 栏外（下方）", L"倒影在 Dock 栏内（不超出栏）" };
@@ -10862,6 +11428,7 @@ static void BuildRows(void) {
     RTogA(P, L"开机自启动", A_AUTOSTART, NULL);
     RTog(P, L"锁定 Dock 布局", &cfg.lock, L"防止误拖动、误移除图标");
     RTog(P, L"显示未固定的运行中应用", &cfg.showRunning, L"在分割线之后显示正在运行的应用，可拖入固定"); Perf(2);
+    RTog(P, L"分组中的运行应用也在右侧显示", &cfg.groupRunning, L"需开启上方的运行中应用显示。保留组内快捷方式，点击右侧图标恢复已有窗口");
     RTog(P, L"全局快捷键", &cfg.hotkey, L"随时显示 / 隐藏 Dock，快捷键可以自定义");
     { WCHAR hk[96], lbl[128]; HkText(hk, 96); wsprintfW(lbl, L"修改快捷键（当前：%s）", hk); static WCHAR hkl[160]; lstrcpyW(hkl, lbl); RBtn(P, hkl, A_HKEDIT); }
     RTog(P, L"防止被清理工具关闭", &cfg.guardian, L"启动一个极小的守护进程（约 1 MB），被结束后自动重新打开"); Perf(1);
@@ -10882,6 +11449,7 @@ static void BuildRows(void) {
     RCmb(P, L"网页使用的浏览器", &cfg.browser, o_browser, 5);
     RHdr(P, L"任务栏");
     RCmb(P, L"隐藏系统任务栏", &cfg.taskHide, o_taskhide, 3);
+    RTxt(P, L"任务栏隐藏仅在 MiniDock 运行时生效，正常退出后恢复 Windows 任务栏。", 40);
     RTog(P, L"任务栏显示在屏幕顶部", &cfg.taskTop, L"把系统任务栏移到屏幕顶部；需要重启资源管理器生效，且不能与顶部状态栏同时使用"); Dep(&cfg.statusBar, 1, 1);
     RTog(P, L"Ctrl + 悬停临时显示任务栏", &cfg.taskPeek, L"仅对“永久隐藏”有效：按住 Ctrl 把鼠标移到任务栏边缘时临时显示"); Dep(&cfg.taskHide, 2, 0);
     RTog(P, L"任务栏透明", &cfg.taskTrans, L"让任务栏底板半透明；关闭后恢复系统原样"); Dep(&cfg.taskHide, 0, 0);
@@ -10968,12 +11536,12 @@ static void BuildRows(void) {
     RTog(P, L"悬停运行中的应用显示窗口预览", &cfg.preview, L"使用系统缩略图，仅悬停时占用"); Perf(1);
     RTog(P, L"多窗口应用悬停显示窗口列表", &cfg.pvList, L"开启后，同一应用多个窗口时悬停弹出窗口列表（点击切换）；关闭则平铺缩略图"); Dep(&cfg.preview, 1, 0);
     RHdr(P, L"窗口缩放");
-    RTog(P, L"点击运行中的应用 = 最小化 / 恢复", &cfg.clickToggle, L"窗口在最前时再次点击会缩回 Dock，再点击恢复");
+    RTog(P, L"再次点击前台应用时最小化", &cfg.clickToggle, L"开启后再次点击前台应用的 Dock 图标会将它最小化。窗口恢复动画由下面的动画开关控制");
     RTog(P, L"启动应用时图标弹跳", &cfg.bounce, NULL);
     RTog(P, L"最小化 / 还原动画（飞入飞出 Dock）", &cfg.minAnim, L"窗口缩入图标，点击图标还原时从图标展开，并取消系统的最小化动画"); Perf(1);
     RSl(P, L"飞入飞出动画时长", &cfg.animSpeed, 200, 1000, L" ms"); Dep(&cfg.minAnim, 1, 0);
-    RCmb(P, L"动画风格", &cfg.minStyle, o_minstyle, 2); Dep(&cfg.minAnim, 1, 0);
-    RTxt(P, L"压缩飞入：窗口本体逐步缩小压回 Dock 图标，再从图标放大还原。图标飞入：窗口淡出并滑向图标、从图标非线性弹出，避免 Chromium 类窗口缩放白底。", 60);
+    RCmb(P, L"动画风格", &cfg.minStyle, o_minstyle, ARRAYSIZE(o_minstyle)); Dep(&cfg.minAnim, 1, 0);
+    RTxt(P, L"两种经典风格沿用原版窗口动画，开销较低。流畅压缩使用合成预览，HDR 下会抓取快照以减少恢复闪烁和泛白，使用更多内存和显存。", 60);
     RHdr(P, L"起动台");
     RSl(P, L"每页列数", &cfg.lpCols, 3, 12, L" 列");
     RSl(P, L"每页行数", &cfg.lpRows, 2, 8, L" 行");
@@ -10993,7 +11561,7 @@ static void BuildRows(void) {
     RTog(P, L"游戏模式防误触", &cfg.gameGuard, L"游戏运行时，鼠标滑到屏幕边缘也不会弹出 Dock，避免误触");
     RTog(P, L"自动识别全屏游戏", &cfg.gameAuto, L"独占全屏（Direct3D）游戏自动生效；其它游戏可手动加入列表");
     RBtn(P, L"将当前前台程序加入 / 移出游戏列表", A_GAMEADD);
-    RTxt(P, L"点击会切换当前前台程序的游戏列表状态：未加入则加入，已加入则移除。游戏模式同时隐藏 Dock 和顶部状态栏。", 38);
+    RTxt(P, L"点击可将前台程序加入或移出游戏名单。顶部状态栏在游戏全屏或最大化时自动隐藏；游戏模式开关单独控制 Dock 防误触。", 38);
     PageFooter(P);
 
     P = 22;  /* ---- 弧形展开 ---- */
@@ -11050,6 +11618,8 @@ static void BuildRows(void) {
     RTog(P, L"macOS 式顶部状态栏", &cfg.statusBar, L"开启后左侧为 MiniDock 菜单，右侧为时间 / 控制中心 / 托盘 / 电量等"); Perf(1);
     RTxt(P, L"开启顶部状态栏后，这里会显示它全部的样式、位置与显示项配置。", 40); Dep(&cfg.statusBar, 0, 0);
     int sbCfgStart = g_nrow;
+    RTxt(P, L"视频或游戏进入真正全屏时隐藏，退出全屏后恢复。浏览器、播放器和游戏普通打开或窗口最大化时均保持显示；其他游戏可加入游戏名单。", 64);
+    RTog(P, L"全屏视频/游戏时隐藏", &cfg.sbFullscreenHide, L"仅视频或游戏真正全屏时隐藏；普通窗口和窗口最大化时始终显示，退出全屏后恢复");
     RTog(P, L"弹窗毛玻璃", &cfg.sbPopFrost, L"控制中心 / 通知 / 时间日期 / MiniDock 菜单等弹窗使用磨砂玻璃；关闭后为纯色卡片");
     RSl(P, L"毛玻璃模糊程度", &cfg.sbPopBlur, 0, 100, L" %"); Dep(&cfg.sbPopFrost, 1, 0);
     RTog(P, L"磨砂底盘", &cfg.sbFrost, L"开启：半透明磨砂底色；关闭：纯色底盘"); Perf(1);
@@ -12466,6 +13036,8 @@ static void EnsureHotkey(void) {
 }
 static BOOL g_taskbarStateSaved;
 static LPARAM g_taskbarOriginalState = ABS_ALWAYSONTOP;
+static LPARAM g_taskbarAppliedState;
+static BOOL g_taskbarWindowsTouched;
 static int g_taskTopApplied = -1;
 /* Explorer owns the taskbar position and rejects ABM_SETPOS from other processes, so the edge lives in
    HKCU\...\Explorer\StuckRects3 (Settings[12]: 0 left, 1 top, 2 right, 3 bottom) and needs an Explorer restart. */
@@ -12508,6 +13080,7 @@ static void ApplyTaskbarEdge(void) {
 }
 static void ApplyTaskbarWindow(HWND t, BOOL show) {
     if (!t || !IsWindow(t)) return;
+    g_taskbarWindowsTouched = TRUE;
     LONG ex = GetWindowLongW(t, GWL_EXSTYLE);
     if (cfg.taskTrans && cfg.taskHide == 0) {
         if (!(ex & WS_EX_LAYERED)) SetWindowLongW(t, GWL_EXSTYLE, ex | WS_EX_LAYERED);
@@ -12525,6 +13098,40 @@ static void ApplyTaskbarWindow(HWND t, BOOL show) {
         SetWindowPos(t, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
     }
 }
+static LPARAM TaskbarStateForMode(LPARAM original) {
+    LPARAM state = original & ~ABS_AUTOHIDE;
+    /* Merely hiding a normal top taskbar leaves its full height reserved. Use the
+       Shell's auto-hide state to release that strip before hiding its window. */
+    if (cfg.taskHide == 1 || (cfg.statusBar && cfg.sbMaxAvoid && SbHiddenTopTaskbar())) state |= ABS_AUTOHIDE;
+    return state;
+}
+static void RestoreTaskbarState(void) {
+    if (!g_taskbarStateSaved) return;
+    APPBARDATA ab = { sizeof ab };
+    ab.hWnd = FindWindowW(L"Shell_TrayWnd", NULL);
+    if (!ab.hWnd) return;
+    if ((LPARAM)SHAppBarMessage(ABM_GETSTATE, &ab) != g_taskbarAppliedState) return;
+    ab.lParam = g_taskbarOriginalState;
+    SHAppBarMessage(ABM_SETSTATE, &ab); /* undo only our temporary state, not later user changes */
+}
+static BOOL CALLBACK ShowTaskbarOnExit(HWND window, LPARAM unused) {
+    (void)unused;
+    WCHAR cls[64];
+    if (!GetClassNameW(window, cls, 64)) return TRUE;
+    if (!lstrcmpW(cls, L"Shell_TrayWnd") || !lstrcmpW(cls, L"Shell_SecondaryTrayWnd")) {
+        ShowWindow(window, SW_SHOWNA);
+        SetWindowPos(window, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+        APPBARDATA ab = { sizeof ab }; ab.hWnd = window;
+        SHAppBarMessage(ABM_WINDOWPOSCHANGED, &ab);
+    }
+    return TRUE;
+}
+static void RestoreTaskbar(void) {
+    if (!g_taskbarWindowsTouched && !g_taskbarStateSaved) return;
+    RestoreTaskbarState();
+    EnumWindows(ShowTaskbarOnExit, 0); /* restore all secondary taskbars, not only the first one */
+    g_taskbarWindowsTouched = g_taskbarStateSaved = FALSE;
+}
 static void ApplyTaskbar(void) {
     HWND t = FindWindowW(L"Shell_TrayWnd", NULL);
     HWND s = FindWindowW(L"Shell_SecondaryTrayWnd", NULL);
@@ -12538,11 +13145,8 @@ static void ApplyTaskbar(void) {
     if (t) {
         APPBARDATA ab;
         ZeroMemory(&ab, sizeof ab); ab.cbSize = sizeof ab; ab.hWnd = t;
-        LPARAM state = g_taskbarStateSaved ? g_taskbarOriginalState : ABS_ALWAYSONTOP;
-        /* Mode 0 explicitly means visible, so clear a previously forced auto-hide bit. */
-        state &= ~ABS_AUTOHIDE;
-        if (cfg.taskHide == 1) state |= ABS_AUTOHIDE;
-        ab.lParam = state;
+        ab.lParam = TaskbarStateForMode(g_taskbarStateSaved ? g_taskbarOriginalState : ABS_ALWAYSONTOP);
+        g_taskbarAppliedState = ab.lParam;
         SHAppBarMessage(ABM_SETSTATE, &ab);
         SHAppBarMessage(ABM_WINDOWPOSCHANGED, &ab);
     }
@@ -12557,6 +13161,7 @@ static void ApplyTaskbar(void) {
 static void ApplySettings(void) {
     static DWORD lastGrpSig;
     static int lastLog = -1;
+    static BOOL lastSmooth;
     if (lastLog != cfg.logCollect) { lastLog = cfg.logCollect; if (cfg.logCollect) LogEvent(L"log-collection-enabled", 0); }
     static int lastTrayHide = -1, lastMinAnim = -1, lastNotes = -1, lastClock = -1, lastNotifyW = -1, lastPin = -2;
     if (cfg.zoomSize < cfg.iconSize) cfg.zoomSize = cfg.iconSize;
@@ -12569,6 +13174,12 @@ static void ApplySettings(void) {
     if (cfg.trayHide != lastTrayHide) { lastTrayHide = cfg.trayHide; if (cfg.trayHide) Shell_NotifyIconW(NIM_DELETE, &g_nid); else AddTray(); }
     EnsureHotkey();
     if (cfg.minAnim != lastMinAnim) { lastMinAnim = cfg.minAnim; SetMinHook(cfg.minAnim); }
+    BOOL smooth = cfg.minAnim && cfg.minStyle == MIN_STYLE_SMOOTH;
+    if (smooth != lastSmooth) {
+        lastSmooth = smooth;
+        if (smooth) { if (HdrActive()) WgcPrewarm(); }
+        else WgcShutdown();
+    }
     { UINT ms = (UINT)(cfg.frostHold < 1 ? 1 : cfg.frostHold > 10 ? 10 : cfg.frostHold) * 1000; if (g_hwnd) SetTimer(g_hwnd, T_FROST, ms, NULL); }
     HideTaskbarButton(g_hwnd);
     {   /* rebuilding every group icon is expensive: only do it when something they are drawn from changed
@@ -12579,6 +13190,13 @@ static void ApplySettings(void) {
         if (sig != lastGrpSig) { lastGrpSig = sig; RebuildGroups(); }
     }
     ApplyTaskbar();
+    {
+        static int lastRunning = -1, lastGroupRunning = -1;
+        if (g_hwnd && (lastRunning != cfg.showRunning || lastGroupRunning != cfg.groupRunning)) {
+            lastRunning = cfg.showRunning; lastGroupRunning = cfg.groupRunning;
+            ScanRunning();
+        }
+    }
     if (cfg.guardian) SpawnGuardian();
     if (cfg.notes != lastNotes) { lastNotes = cfg.notes; if (cfg.notes) AddNote(); else RemoveNote(); }
     if (cfg.clock != lastClock) {
@@ -13201,9 +13819,12 @@ static LRESULT CALLBACK DockProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             g_minPlacementValid = FALSE;
             return 0;
         }
-        if (g_anim) FlyRun((float)(cfg.animSpeed < 200 ? 200 : cfg.animSpeed > 1000 ? 1000 : cfg.animSpeed));
+        BOOL compositor = g_anim && !g_animDirect;
         g_selfMin = mw; g_selfMinTick = GetTickCount();
-        if (IsWindow(mw)) CommitMinimizeKeepPlacement(mw, g_minPlacementValid ? &g_minPlacement : NULL);
+        if (compositor && IsWindow(mw)) CommitMinimizeKeepPlacement(mw, g_minPlacementValid ? &g_minPlacement : NULL);
+        if (g_anim) FlyRun((float)(cfg.animSpeed < 200 ? 200 : cfg.animSpeed > 1000 ? 1000 : cfg.animSpeed));
+        if (g_anim) AnimFinish();
+        if (!compositor && IsWindow(mw)) CommitMinimizeKeepPlacement(mw, g_minPlacementValid ? &g_minPlacement : NULL);
         g_minPlacementValid = FALSE;
         return 0;
     }
@@ -13298,13 +13919,17 @@ static LRESULT CALLBACK DockProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         return 0;
     case WM_DESTROY:
         LogEvent(L"shutdown", 0);
+        WgcShutdown();
         SaveNow();
         GpbFree();
         ClearTrayApps();
         if (g_quitEvt) SetEvent(g_quitEvt);
         SetMinHook(FALSE);
         SetupAppBar(FALSE, 0);
+        SbHide(); /* unregister the top AppBar before its window disappears with the process */
+        ApplyDockReserveFallback(FALSE);
         RestoreWorkArea();
+        RestoreTaskbar(); /* let Explorer recompute the final area after releasing our own reservations */
         if (g_hkReg) { UnregisterHotKey(h, 1); g_hkReg = FALSE; }
         HookHotkey(FALSE);
         ClosePreview();
@@ -13316,6 +13941,7 @@ static LRESULT CALLBACK DockProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     if (m == g_taskbarMsg && m) {   /* Explorer restarted: the app bar registration is gone */
         AddTray();
         g_abKey = 0;
+        g_sbAbReg = FALSE; g_sbAbDirty = TRUE;
         ApplyTaskbar();
         UpdateGeometry();
         SbTick();
@@ -13391,7 +14017,7 @@ int WINAPI WinMain(HINSTANCE hi, HINSTANCE hp, LPSTR cmd, int show) {
     LoadConfig();
     LogInit();
     LogEvent(L"startup", GetCurrentProcessId());
-    LogEvent(L"app-version-1.7.4", 0);
+    LogEvent(L"app-version-1.7.4-hdrsnap.15", 0);
     LogEvent(L"windows-build", g_osBuild);
     LogEvent(L"display-dpi", (DWORD)g_dpi);
     LogEvent(L"display-width", (DWORD)GetSystemMetrics(SM_CXSCREEN));
