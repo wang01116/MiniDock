@@ -8,7 +8,7 @@
 
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/wang01116/MiniDock/main/docs/logo-128.png" width="96" alt="MiniDock" />
+<img src="assets/logo-128.png" width="96" alt="MiniDock" />
 
 # MiniDock
 
