@@ -26,7 +26,7 @@ Hand-written in C with Win32 + GDI+. No Electron, no .NET, no VC++ runtime — a
 <!-- Language switch: replace README.md / README.en.md above if your files use different names. -->
 | ![1](assets/img/1.jpg) | ![2](assets/img/2.jpg) | ![3](assets/img/3.jpg) | ![4](assets/img/4.jpg) |
 | :---: | :---: | :---: | :---: |
-| Setting | Search | ~ | ~ |
+| ~ | Search | ~ | ~ |
 
 </div>
 
