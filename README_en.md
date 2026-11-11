@@ -24,6 +24,9 @@ Hand-written in C with Win32 + GDI+. No Electron, no .NET, no VC++ runtime — a
 [简体中文](README.md) · [English](README.en.md) · [Website](https://wang01116.github.io/MiniDock) · [Download](#-download--install)
 
 <!-- Language switch: replace README.md / README.en.md above if your files use different names. -->
+| ![1](assets/img/1.jpg) | ![2](assets/img/2.jpg) | ![3](assets/img/3.jpg) | ![4](assets/img/4.jpg) |
+| :---: | :---: | :---: | :---: |
+| Setting | Search | ~ | ~ |
 
 </div>
 
