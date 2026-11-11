@@ -25,6 +25,8 @@
 
 <!-- 语言切换链接：如需指向其它文件名，请替换上面的 README.md / README.en.md -->
 
+<img width="80%" alt="MiniDock 通用配置" src="assets/image1.jpg">
+
 </div>
 
 ---
