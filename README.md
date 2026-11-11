@@ -21,7 +21,7 @@
 [![Language](https://img.shields.io/badge/C%20%2B%20Win32-native-555)](#-技术栈)
 [![License](https://img.shields.io/badge/license-see%20LICENSE-lightgrey)](#-许可证)
 
-[简体中文](README.md) · [English](README.en.md) · [官网](https://wang01116.github.io/MiniDock) · [下载](#-下载与安装)
+[简体中文](README.md) · [English](README_en.md) · [官网](https://wang01116.github.io/MiniDock) · [下载](#-下载与安装)
 
 <!-- 语言切换链接：如需指向其它文件名，请替换上面的 README.md / README.en.md -->
 
