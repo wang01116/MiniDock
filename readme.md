@@ -25,7 +25,11 @@
 
 <!-- 语言切换链接：如需指向其它文件名，请替换上面的 README.md / README.en.md -->
 
-<img width="80%" alt="MiniDock 通用配置" src="assets/image1.jpg">
+<!--<img width="80%" alt="MiniDock 通用配置" src="assets/image1.jpg">-->
+
+| ![1](assets/img/1.jpg) | ![2](assets/img/2.jpg) | ![3](assets/img/3.jpg) | ![4](assets/img/4.jpg) |
+| :---: | :---: | :---: | :---: |
+| Dock 与设置 | 起动台与搜索引擎 | 弧形展开 | 神奇效果动画 |
 
 </div>
 
