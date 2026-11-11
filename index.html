@@ -243,20 +243,7 @@ section[id] { scroll-margin-top: 78px; }
 .pick .card h3 .ico { width: 18px; height: 18px; }
 .pick .card.mini { border-color: var(--accent); background: linear-gradient(180deg, var(--accent-soft), transparent 70%), var(--card); }
 
-/* changelog */
-.tl { max-width: 840px; }
-.tl-item { display: grid; grid-template-columns: 118px 1fr; gap: 24px; padding: 22px 0; border-top: 1px solid var(--line); }
-.tl-item:first-child { border-top: none; }
-.tl-ver { font-size: 17px; font-weight: 700; }
-.tl-ver small { display: block; font-size: 12px; font-weight: 500; color: var(--text-3); margin-top: 2px; }
-.tl-body h4 { font-size: 13px; font-weight: 650; color: var(--text-2); display: flex; align-items: center; gap: 7px; margin: 14px 0 8px; }
-.tl-body h4:first-child { margin-top: 0; }
-.tl-body h4 .ico { width: 15px; height: 15px; }
-.tl-body h4.new { color: var(--accent); }
-.tl-body h4.fix { color: var(--ok); }
-.tl-body ul { list-style: none; display: grid; gap: 5px; }
-.tl-body li { font-size: 14px; color: var(--text-2); padding-left: 15px; position: relative; }
-.tl-body li::before { content: ""; position: absolute; left: 2px; top: 10px; width: 5px; height: 5px; border-radius: 50%; background: var(--line-2); }
+.cmp-sub { font-size: 15px; font-weight: 650; margin: 28px 0 10px; color: var(--text-2); }
 
 /* guide */
 .step { display: flex; gap: 14px; }
@@ -413,7 +400,7 @@ footer { border-top: 1px solid var(--line); padding: 30px 0; margin-top: 26px; }
       <a href="#dock">Dock</a>
       <a href="#statusbar">状态栏</a>
       <a href="#compare">对比</a>
-      <a href="#changelog">更新</a>
+      <a href="#features">新特性</a>
       <a href="#guide">上手</a>
       <a href="#download">下载</a>
     </div>
@@ -680,61 +667,61 @@ footer { border-top: 1px solid var(--line); padding: 30px 0; margin-top: 26px; }
   <div class="container">
     <div class="head reveal">
       <div class="kicker">客观对比</div>
-      <h2>和 MyDockFinder 有什么不同</h2>
-      <p>两者都是 Windows 上做 macOS 风格美化的工具，但路线不同：MyDockFinder 是「Dock + 状态栏 + 系统控制」的完整套件，MiniDock 是「把 Dock 与状态栏做轻、做透」的原生小工具。下面按功能类别如实列出差异。</p>
+      <h2>MiniDock、MyDockFinder、BitDock 怎么选</h2>
+      <p>三家路线不同：MyDockFinder 是「Dock + 状态栏 + 系统控制」的完整套件，BitDock 偏向桌面美化与图标整理，MiniDock 把 Dock 与顶部状态栏做轻、做透，主程序不到 400 KB。下表统一对比，标注「—」表示未在公开资料中确认。</p>
     </div>
     <div class="cmp-wrap reveal">
       <div class="cmp-scroll">
         <table class="cmp">
-          <caption class="skip">MiniDock 与 MyDockFinder 功能对比</caption>
+          <caption class="skip">MiniDock、MyDockFinder 与 BitDock 功能对比</caption>
           <thead>
-            <tr><th scope="col">对比项</th><th scope="col">MiniDock</th><th scope="col">MyDockFinder</th></tr>
+            <tr><th scope="col">对比项</th><th scope="col">MiniDock</th><th scope="col">MyDockFinder</th><th scope="col">BitDock</th></tr>
           </thead>
           <tbody>
-            <tr class="grouprow"><td colspan="3">定位与体积</td></tr>
-            <tr><td>产品定位</td><td><span class="yes">专注 Dock 与状态栏</span></td><td>Dock + 状态栏 + 系统美化的完整套件</td></tr>
-            <tr><td>安装方式</td><td><span class="yes">单文件，双击即用</span></td><td>安装包 / Steam 发行</td></tr>
-            <tr><td>运行时依赖</td><td><span class="yes">无（纯 Win32 + 系统 GDI+）</span></td><td>需要额外运行时与组件</td></tr>
-            <tr><td>主程序体积</td><td><span class="yes">约 400 KB</span></td><td>安装包与资源占用明显更大</td></tr>
-            <tr><td>内存占用</td><td><span class="yes">空闲几十 MB，无常驻动画定时器</span></td><td>高于 MiniDock</td></tr>
-            <tr><td>价格</td><td><span class="yes">免费、开源</span></td><td>付费（Steam / 官网）</td></tr>
-            <tr><td>源码</td><td><span class="yes">公开，C + Win32 + GDI+</span></td><td>闭源</td></tr>
-
-            <tr class="grouprow"><td colspan="3">Dock 功能</td></tr>
-            <tr><td>固定应用 / 文件夹 / 网址</td><td>支持</td><td>支持（含 UWP 快捷方式、批量拖入）</td></tr>
-            <tr><td>窗口预览</td><td>支持（系统缩略图，悬停才占用）</td><td>支持（含 UWP，大小与延迟可调）</td></tr>
-            <tr><td>最小化 / 恢复动画</td><td>逐帧移动真实窗口，动画结束才提交最小化</td><td>D3D11 硬件加速，多种效果</td></tr>
-            <tr><td>文件夹弧形展开</td><td>支持（弧度可调、可拖出）</td><td>文件夹列表与二级目录</td></tr>
-            <tr><td>应用组</td><td><span class="yes">宫格卡片、可换图标、可调背景</span></td><td>基础支持</td></tr>
-            <tr><td>起动台 / 启动台</td><td>支持（搜索、背景不透明度可调）</td><td>支持</td></tr>
-            <tr><td>速记 / 临时周转组</td><td><span class="yes">支持</span></td><td>—</td></tr>
-            <tr><td>外观自定义</td><td>底盘、渐变、磨砂、倒影、运行指示逐项可调</td><td>统一遮罩与主题</td></tr>
-
-            <tr class="grouprow"><td colspan="3">状态栏与小组件</td></tr>
-            <tr><td>顶部状态栏</td><td><span class="yes">支持（macOS 式，可关）</span></td><td>支持（MyFinder）</td></tr>
-            <tr><td>控制中心</td><td>支持（9 个开关 + 音量 + 电量）</td><td>支持</td></tr>
-            <tr><td>资源监控</td><td>CPU / 内存 / 磁盘</td><td>更全面（含网速、温度等）</td></tr>
-            <tr><td>天气（联网）</td><td><span class="no">不做</span></td><td><span class="yes">支持</span></td></tr>
-            <tr><td>消息提醒</td><td>任务栏闪烁 / 未读红点</td><td><span class="yes">支持</span>（QQ / 微信 / 钉钉等）</td></tr>
-            <tr><td>媒体控制 / 每程序音量</td><td><span class="no">不做</span></td><td><span class="yes">支持</span></td></tr>
-            <tr><td>音量 / 亮度</td><td>音量滑杆 + 显示器 DDC 亮度</td><td><span class="yes">支持</span>（含台式机亮度）</td></tr>
-            <tr><td>WiFi / 蓝牙</td><td>提供开关入口，跳转系统设置</td><td><span class="yes">内置管理</span></td></tr>
-
-            <tr class="grouprow"><td colspan="3">系统与稳定性</td></tr>
-            <tr><td>任务栏自动隐藏 / 永久隐藏</td><td>支持，Ctrl 悬停临时显示</td><td>支持</td></tr>
-            <tr><td>游戏模式</td><td><span class="yes">防误触 + 自动隐藏状态栏</span></td><td>—</td></tr>
-            <tr><td>专注模式（多套布局）</td><td><span class="yes">支持</span></td><td>—</td></tr>
-            <tr><td>多显示器 / 高 DPI</td><td>Per-Monitor V2</td><td>支持</td></tr>
-            <tr><td>配置导入 / 导出</td><td>支持</td><td>支持</td></tr>
-            <tr><td>诊断日志</td><td>可选、默认关闭、可导出、约 2 MiB 上限</td><td>—</td></tr>
+            <tr class="grouprow"><td colspan="4">定位与体积</td></tr>
+            <tr><td>产品定位</td><td>专注 Dock 与状态栏（更轻）</td><td>Dock + 状态栏 + 系统美化的完整套件</td><td>桌面美化与图标整理工具集</td></tr>
+            <tr><td>安装方式</td><td><span class="yes">单文件，双击即用</span></td><td>安装包 / Steam 发行</td><td>安装包</td></tr>
+            <tr><td>运行时依赖</td><td><span class="yes">无（纯 Win32 + 系统 GDI+）</span></td><td>需要额外运行时与组件</td><td>需要额外运行时/组件</td></tr>
+            <tr><td>主程序体积</td><td><span class="yes">约 400 KB（压缩后约 190 KB）</span></td><td>安装包与资源体积明显更大</td><td>明显更大</td></tr>
+            <tr><td>内存占用</td><td><span class="yes">空闲可归还到 10 MB 内，无常驻动画定时器</span></td><td>高于 MiniDock</td><td>高于 MiniDock</td></tr>
+            <tr><td>价格</td><td><span class="yes">免费、开源</span></td><td>付费（Steam / 官网）</td><td>免费版 + 付费版</td></tr>
+            <tr><td>源码</td><td>公开，C + Win32 + GDI+</td><td>闭源</td><td>闭源</td></tr>
+            <tr class="grouprow"><td colspan="4">Dock 功能</td></tr>
+            <tr><td>固定应用 / 文件夹 / 网址</td><td><span class="yes">支持</span></td><td><span class="yes">支持（含 UWP 快捷方式、批量拖入）</span></td><td><span class="yes">支持</span></td></tr>
+            <tr><td>窗口预览</td><td><span class="yes">支持（DWM 实时缩略图，悬停才占用）</span></td><td><span class="yes">支持（含 UWP，大小与延迟可调）</span></td><td><span class="yes">支持</span></td></tr>
+            <tr><td>神奇效果动画</td><td>快照条带折叠，最小化 / 还原对称，Electron 与资源管理器有兜底</td><td>D3D11 硬件加速，多种效果</td><td>提供多种动画样式</td></tr>
+            <tr><td>文件夹弧形展开</td><td><span class="yes">支持（弧度可调、可拖出）</span></td><td>文件夹列表与二级目录</td><td><span class="yes">支持分组与托盘</span></td></tr>
+            <tr><td>应用组</td><td>宫格卡片、可换图标、可调背景色</td><td><span class="yes">基础支持</span></td><td><span class="yes">支持分组与托盘</span></td></tr>
+            <tr><td>起动台 / 启动台</td><td><span class="yes">支持（打字即搜、背景不透明度可调）</span></td><td><span class="yes">支持</span></td><td><span class="yes">支持</span></td></tr>
+            <tr><td>起动台搜索引擎条</td><td>13 个内置引擎 + 自定义，可排序 / 改色 / 逐引擎绑定浏览器</td><td>—</td><td>—</td></tr>
+            <tr><td>速记 / 临时周转组</td><td><span class="yes">支持（可导出 txt / Markdown）</span></td><td>—</td><td>—</td></tr>
+            <tr><td>外观自定义</td><td>底盘、渐变、磨砂、倒影、运行指示逐项可调</td><td>统一遮罩与主题</td><td>提供主题与美化</td></tr>
+            <tr class="grouprow"><td colspan="4">状态栏与小组件</td></tr>
+            <tr><td>顶部状态栏</td><td><span class="yes">支持（macOS 式，可关，可逐屏镜像）</span></td><td><span class="yes">支持（MyFinder）</span></td><td>以 Dock 与桌面美化为主</td></tr>
+            <tr><td>控制中心</td><td><span class="yes">支持（9 个开关 + 音量 + 电量）</span></td><td><span class="yes">支持</span></td><td>—</td></tr>
+            <tr><td>资源监控</td><td>CPU / 内存 / 磁盘，点击展开</td><td>更全面（含网速、温度等）</td><td>—</td></tr>
+            <tr><td>天气（联网）</td><td>不做</td><td><span class="yes">支持</span></td><td>—</td></tr>
+            <tr><td>消息提醒</td><td>任务栏闪烁 / 未读红点</td><td><span class="yes">支持（QQ / 微信 / 钉钉等）</span></td><td>—</td></tr>
+            <tr><td>媒体控制 / 每程序音量</td><td>不做</td><td><span class="yes">支持</span></td><td>提供媒体控制</td></tr>
+            <tr><td>音量 / 亮度</td><td>音量滑杆 + 显示器 DDC 亮度</td><td><span class="yes">支持（含台式机亮度）</span></td><td><span class="yes">支持</span></td></tr>
+            <tr><td>WiFi / 蓝牙</td><td>提供入口，跳转系统设置</td><td>内置管理</td><td>提供系统入口</td></tr>
+            <tr><td>电池健康（WMI）</td><td>设计容量 / 满充容量 / 健康度 / 循环次数</td><td>—</td><td>—</td></tr>
+            <tr class="grouprow"><td colspan="4">系统与稳定性</td></tr>
+            <tr><td>任务栏自动隐藏 / 永久隐藏</td><td><span class="yes">支持，Ctrl 悬停临时显示</span></td><td><span class="yes">支持</span></td><td>提供任务栏相关美化</td></tr>
+            <tr><td>游戏模式</td><td>防误触 + 自动隐藏状态栏</td><td>—</td><td>—</td></tr>
+            <tr><td>专注模式（多套布局）</td><td><span class="yes">支持</span></td><td>—</td><td>—</td></tr>
+            <tr><td>多显示器 / 高 DPI</td><td>指定屏 / 跟随鼠标 / 逐屏镜像，Per-Monitor V2</td><td><span class="yes">支持</span></td><td><span class="yes">支持多屏</span></td></tr>
+            <tr><td>配置导入 / 导出</td><td><span class="yes">支持</span></td><td><span class="yes">支持</span></td><td><span class="yes">支持</span></td></tr>
+            <tr><td>诊断日志</td><td>可选、默认关闭、可导出、约 2 MiB 上限</td><td>—</td><td>—</td></tr>
           </tbody>
         </table>
       </div>
     </div>
     <p class="cmp-note reveal">
-      说明：MiniDock 一侧为按当前源码逐项核对的结果；MyDockFinder 一侧依据公开资料与社区反馈整理，
-      标注「—」表示未在公开资料中确认，实际能力请以其<a href="https://www.mydockfinder.com/" target="_blank" rel="noopener">官方网站</a>与最新版本为准。
-      两者定位不同，选择取决于你更需要「极致的轻与可控」，还是「一站式全家桶」。
+      说明：MiniDock 一侧为按当前源码逐项核对；MyDockFinder 与 BitDock 一侧依据公开资料与社区反馈整理，
+      「—」表示未在公开资料中确认，实际能力请以各自官网与最新版本为准
+      （<a href="https://www.mydockfinder.com/" target="_blank" rel="noopener">MyDockFinder</a>、BitDock）。
+      三者定位不同：要极致的轻与可控选 MiniDock，要一站式全家桶选 MyDockFinder，要桌面美化与图标整理选 BitDock。
     </p>
 
     <div class="pick">
@@ -755,81 +742,73 @@ footer { border-top: 1px solid var(--line); padding: 30px 0; margin-top: 26px; }
           <li>你能接受付费，且不在意更大的安装体积与资源占用</li>
         </ul>
       </div>
+      <div class="card reveal">
+        <h3><svg class="ico"><use href="#i-grid"/></svg>选 BitDock，如果……</h3>
+        <ul>
+          <li>你主要想装饰桌面、整理图标与快捷方式</li>
+          <li>你更看重主题、皮肤与视觉效果，而不是极简占用</li>
+          <li>你能接受安装包与额外运行时，并接受免费版 + 付费版的模式</li>
+        </ul>
+      </div>
     </div>
   </div>
 </section>
 
-<!-- ================= CHANGELOG ================= -->
-<section id="changelog">
+<!-- ================= FEATURES ================= -->
+<section id="features">
   <div class="container">
-    <div class="head reveal">
-      <div class="kicker">更新记录</div>
-      <h2>最近几个版本做了什么</h2>
-      <p>每个版本都以稳定为先：修复问题优先于新增功能。</p>
+    <div class="head center">
+      <div class="kicker">最近更新</div>
+      <h2>这一版新增与改进</h2>
+      <p>全部来自近期版本的实际改动，不写版本流水。</p>
     </div>
-    <div class="tl">
-
-      <div class="tl-item reveal">
-        <div class="tl-ver">v1.7.3<small>最新</small></div>
-        <div class="tl-body">
-          <h4 class="new"><svg class="ico"><use href="#i-plus"/></svg>新增</h4>
-          <ul>
-            <li>游戏模式同时隐藏顶部状态栏；游戏列表支持「移除当前程序」，用最近外部前台窗口识别目标，避免把 MiniDock 自己加进去</li>
-            <li>顶部状态栏新增专注模式入口；状态栏小组件右键可单独关闭，输入法区域右键打开系统输入法设置</li>
-            <li>控制中心改为 4 列 × 2 行，可拖拽排序；节能方案状态改为实读当前电源方案</li>
-            <li>右键菜单配置新增 6 个独立显示开关（窗口合并 / 独立、右侧分割线、设置图标、重命名、复制、Dock 设置）</li>
-            <li>起动台图标右键直接进入起动台设置；有线网络入口改为打开网络适配器，不再误开 Wi-Fi 配置</li>
-          </ul>
-        </div>
+    <div class="grid-3">
+      <div class="card">
+        <div class="ci"><svg class="ico"><use href="#i-monitor"/></svg></div>
+        <h3>多显示器：逐屏镜像</h3>
+        <p>Dock 与顶部状态栏可只在指定屏幕显示、跟随鼠标所在屏幕，或选择「所有显示器（同时显示）」在每块屏幕各显示一条，位置与缩放按各屏 DPI 计算。</p>
       </div>
-
-      <div class="tl-item reveal">
-        <div class="tl-ver">v1.7.2</div>
-        <div class="tl-body">
-          <h4 class="new"><svg class="ico"><use href="#i-plus"/></svg>新增</h4>
-          <ul>
-            <li>顶部状态栏小组件：时间日期、通知、控制中心、资源监视器、计时器 / 待办、专注模式、系统托盘、电源，均可单独开关</li>
-            <li>通知小组件接管任务栏闪烁 / 未读提醒，点击直达对应窗口；起动台右键新增「起动台设置」，背景不透明度滑块（0–100%）</li>
-            <li>电池小组件独立开关；Dock 位于左右侧时，小组件收拢为 1×1 入口 + 快捷列表</li>
-            <li>「设置 → 关于 → 问题诊断与日志」：可开启日志收集、导出、清空；默认关闭，仅记录运行事件与错误码，不含窗口标题、路径、输入、剪贴板与截图，总量约 2 MiB</li>
-          </ul>
-          <h4 class="fix"><svg class="ico"><use href="#i-check"/></svg>调整与修复</h4>
-          <ul>
-            <li>窗口动画改为逐帧移动真实窗口：最小化先缩到 Dock 图标，恢复从图标位置移出，结束后还原窗口放置信息</li>
-            <li>任务栏自动隐藏走 AppBar 的 ABS_AUTOHIDE，永久隐藏覆盖主 / 副任务栏，关闭控制后恢复系统原始设置，Explorer 重启后重新应用</li>
-            <li>恢复动画改为从 Dock 图标展开；起动台空白处点击即可关闭</li>
-          </ul>
-        </div>
+      <div class="card">
+        <div class="ci"><svg class="ico"><use href="#i-launch"/></svg></div>
+        <h3>起动台内置搜索引擎条</h3>
+        <p>搜索框下方一排引擎胶囊：内置 Bing、百度、Google、Yandex、DuckDuckGo、Yahoo、搜狗、360、Ecosia、Bilibili、GitHub、知网、YouTube，可启用/排序/改颜色/重命名/删除，也可自定义；每个引擎能单独绑定 Edge / Chrome / Firefox。</p>
       </div>
-
-      <div class="tl-item reveal">
-        <div class="tl-ver">v1.7.0</div>
-        <div class="tl-body">
-          <h4 class="fix"><svg class="ico"><use href="#i-check"/></svg>修复</h4>
-          <ul>
-            <li>任务栏透明度可到 0%，且只透明底板、不透明图标文字</li>
-            <li>设置窗口毛玻璃覆盖整个窗口；右键菜单尺寸收紧；起动台点击空白退出</li>
-            <li>任务栏自动隐藏时 Dock 贴合屏幕底部；锁屏解锁后 Dock 不再跑到桌面中央</li>
-            <li>设置页说明文字与卡片间距自适应，不再留大片空白</li>
-          </ul>
-        </div>
+      <div class="card">
+        <div class="ci"><svg class="ico"><use href="#i-spark"/></svg></div>
+        <h3>快照神奇效果</h3>
+        <p>最小化与还原用同一张快照做条带折叠，Electron（如 DeepSeek Harness）与资源管理器也有兜底抓取；标题栏最小化不再先闪一帧，恢复时比例与落点一致。</p>
       </div>
-
-      <div class="tl-item reveal">
-        <div class="tl-ver">v1.4.0</div>
-        <div class="tl-body">
-          <h4 class="new"><svg class="ico"><use href="#i-plus"/></svg>新增</h4>
-          <ul>
-            <li>应用组末尾「＋」；临时周转组；起动台；速记导出 Markdown</li>
-            <li>时间日期顺序 / 秒 / 日期格式 / 周几；设置页重排；性能三档预设</li>
-          </ul>
-        </div>
+      <div class="card">
+        <div class="ci"><svg class="ico"><use href="#i-tray"/></svg></div>
+        <h3>微信 / QQ 托盘与冷启动</h3>
+        <p>收进托盘后点击图标直接唤出可操作的聊天窗；未登录（只有后台进程）时也能从 Dock 启动出登录窗口，并按应用家族区分，不会互相误点亮运行指示。</p>
       </div>
-
+      <div class="card">
+        <div class="ci"><svg class="ico"><use href="#i-battery"/></svg></div>
+        <h3>电池健康</h3>
+        <p>状态栏电池区域点击后读取 WMI：设计容量、当前满充容量、健康度与循环次数；查询在后台线程执行，固件没提供的字段明确显示「暂不可用」。</p>
+      </div>
+      <div class="card">
+        <div class="ci"><svg class="ico"><use href="#i-gauge"/></svg></div>
+        <h3>更小的包与更低的占用</h3>
+        <p>主程序压缩后约 190 KB；空闲 8 秒无输入即归还工作集，启动台关闭、设置关闭、动画结束后也会归还，实测空闲工作集可降到 10 MB 以内。</p>
+      </div>
+      <div class="card">
+        <div class="ci"><svg class="ico"><use href="#i-sliders"/></svg></div>
+        <h3>设置界面统一云母</h3>
+        <p>设置窗口固定使用 Mica 材质并移除多余开关；搜索框改为单层自绘，左放大镜、右「请输入文字」，支持中文输入法候选落在框内。</p>
+      </div>
+      <div class="card">
+        <div class="ci"><svg class="ico"><use href="#i-clock"/></svg></div>
+        <h3>性能页集中开关</h3>
+        <p>低 / 适中 / 高资源预设之外，磨砂、预览、倒影、动画、状态栏刷新、菜单模糊、应用组扇形等 20 余项高耗能特效均可单独关闭，并提供低电量自动节能。</p>
+      </div>
+      <div class="card">
+        <div class="ci"><svg class="ico"><use href="#i-check"/></svg></div>
+        <h3>持续修掉的细节</h3>
+        <p>右键「启动台设置」直达正确页面，引擎右键菜单与标签菜单同款，起动台背景缓存让鼠标滑动更跟手，设置窗口会跟随 Dock 换屏并重排。</p>
+      </div>
     </div>
-    <p class="cmp-note reveal" style="max-width:840px">
-      更新记录按对外发布版本整理；安装包编号以 <a href="https://github.com/wang01116/MiniDock/releases" target="_blank" rel="noopener">GitHub Releases</a> 为准。
-    </p>
   </div>
 </section>
 
@@ -1024,8 +1003,8 @@ gcc -Os -fno-ident -mwindows -s -static-libgcc ^
       </div>
       <div class="dl reveal">
         <div class="di"><svg class="ico"><use href="#i-layers"/></svg></div>
-        <h3>网盘</h3>
-        <p>国内高速下载，提取码：<strong> </strong></p>
+        <h3>夸克网盘</h3>
+        <p>国内可直接打开，无需提取码；文件与 GitHub Releases 同步。</p>
         <a class="btn btn-ghost" href="https://pan.quark.cn/s/d1ef9e835fbd#/list/share" target="_blank" rel="noopener">前往下载</a>
       </div>
       <!-- 新的下载方式卡片加在这里 -->
