@@ -44,7 +44,7 @@ Hand-written in C with Win32 + GDI+. No Electron, no .NET, no VC++ runtime — a
 - [System Capabilities](#-system-capabilities)
 - [Visuals & Animations](#-visuals--animations)
 - [Ultra-low Footprint](#-ultra-low-footprint)
-- [Download & Install](#-download--install)
+- [ & Install](#---install)
 - [Usage](#-usage)
 - [Quick Start](#-quick-start)
 - [Build from Source](#-build-from-source)
@@ -171,7 +171,7 @@ Custom-drawn, Mica backdrop, follows system light/dark, with search and per-page
 
 ## 📥 Download & Install
 
-- [GitHub Releases](https://github.com/wang01116/MiniDock/releases/latest)
+- [GitHub Releases](https://github.com/wang01116/MiniDock/releases/tag/v2.6.1_EN)
 
 **Install**
 
