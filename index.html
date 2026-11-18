@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MiniDock — 让 Windows 也有一条优雅的 Dock</title>
+<meta name="description" content="MiniDock 2.8.0：纯 C / Win32 手写的 Windows Dock、顶部状态栏、控制中心与桌面小组件。单文件、无依赖、开源免费。">
+<meta name="theme-color" content="#f6f8fc">
+<link rel="icon" type="image/png" href="assets/ico/logo-128.png">
+<link rel="manifest" href="assets/manifest.webmanifest">
+<link rel="apple-touch-icon" href="assets/ico/icon-192.png">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body><svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<defs>
+<symbol id="i-dock" viewBox="0 0 24 24"><rect x="3" y="9" width="18" height="7" rx="2.5"/><circle cx="8" cy="12.5" r="1.2"/><circle cx="12" cy="12.5" r="1.2"/><circle cx="16" cy="12.5" r="1.2"/></symbol>
+<symbol id="i-group" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></symbol>
+<symbol id="i-launch" viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></symbol>
+<symbol id="i-control" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 12h2M10 12h10M4 17h12M20 17h0"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="18" cy="17" r="2"/></symbol>
+<symbol id="i-widget" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="9" rx="2"/><rect x="13" y="4" width="7" height="5" rx="2"/><rect x="13" y="11" width="7" height="9" rx="2"/><rect x="4" y="15" width="7" height="5" rx="2"/></symbol>
+<symbol id="i-picture" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-5 4 4 3-3 4 4"/></symbol>
+<symbol id="i-feather" viewBox="0 0 24 24"><path d="M20 4c-6 0-11 3-13 8l-2 6 6-2c5-2 9-6 9-12z"/><path d="M4 20l6-6"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></symbol>
+<symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></symbol>
+</defs></svg>
+
+<header class="nav">
+  <div class="nav-in">
+    <a class="brand" href="index.html"><img src="assets/ico/logo-128.png" alt="MiniDock"><span>MiniDock<small>FOR WINDOWS</small></span></a>
+    <nav class="nav-links">
+      <a class="on" href="index.html">官网</a>
+      <a href="assets/pages/docs.html">使用文档</a>
+      <a href="assets/pages/compare.html">对比</a>
+      <a href="assets/pages/download.html">下载</a>
+    </nav>
+    <div class="nav-act">
+      <button class="theme-btn" data-theme-toggle aria-label="切换深色/浅色"><svg class="ic sm moon"><use href="#i-moon"/></svg><svg class="ic sm sun"><use href="#i-sun"/></svg></button>
+      <a class="btn btn-soft" href="assets/pages/download.html">下载 2.8.0</a>
+      <button class="menu-btn" aria-label="菜单">☰</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="hero-simple">
+    <div class="wrap in">
+      <span class="hero-badge"><i></i>2.8.0 · 单文件 · 开源免费</span>
+      <h1>让 Windows 也有一条<br><span>优雅的 Dock</span></h1>
+      <p>Dock、顶部状态栏、控制中心与桌面小组件，全部由 C / Win32 / GDI+ 手写。没有 Electron，没有 .NET，解压即用。</p>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="assets/pages/download.html">免费下载</a>
+        <a class="btn btn-ghost" href="assets/pages/docs.html">阅读使用文档</a>
+      </div>
+      <div class="hero-meta">
+        <span>Windows 10 / 11</span><span>≈214 KB 压缩包</span><span>零运行库依赖</span><span>MIT 开源</span>
+      </div>
+
+      <div class="mobile-note">
+        <b>移动端提示：</b>MiniDock 是 Windows 桌面软件，手机无法直接安装。请复制下载链接，到电脑浏览器打开下载。
+        <br><button class="btn btn-soft" data-copy-link>复制下载链接</button>
+      </div>
+
+      <div class="dock-mock" aria-hidden="true">
+        <b class="app a1"></b><b class="app a2"></b><b class="app a3"></b><b class="app a4"></b><b class="app a5"></b><span class="sep"></span>
+        <b class="app a6"></b><b class="app a7"></b><b class="app a8"></b><b class="app a9"></b><b class="app a10"></b>
+      </div>
+    </div>
+  </section>
+
+  <!-- 便当功能卡 -->
+  <section style="padding-top:20px">
+    <div class="wrap">
+      <div class="sec-head">
+        <div>
+          <span class="kicker">亮点</span>
+          <h2 class="title">桌面需要的，它都有。</h2>
+          <p class="lead">不是功能堆砌，只把每天都会用到的部分做好。</p>
+        </div>
+        <a class="more" href="assets/pages/docs.html">完整文档 →</a>
+      </div>
+
+      <div class="bento">
+        <article class="card tint-blue span3">
+          <div class="ico"><svg class="ic"><use href="#i-dock"/></svg></div>
+          <h3>Dock 与放大回弹</h3>
+          <p>悬停按距离平滑放大，点击轻微压缩回弹；支持拖拽排序、分隔线与运行状态小圆点。</p>
+          <div class="mock">
+            <div class="mock-dock"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          </div>
+        </article>
+
+        <article class="card tint-green span3">
+          <div class="ico"><svg class="ic"><use href="#i-control"/></svg></div>
+          <h3>控制中心</h3>
+          <p>Wi‑Fi / 蓝牙左右分区，右侧箭头展开二级列表；音量、亮度、录屏、录音与节能。</p>
+          <div class="mock">
+            <div class="mock-cc"><i></i><i></i><i></i><i></i></div>
+          </div>
+        </article>
+
+        <article class="card tint-purple span2">
+          <div class="ico"><svg class="ic"><use href="#i-launch"/></svg></div>
+          <h3>启动台</h3>
+          <p>宫格浏览全部应用，分类标签与多搜索引擎。</p>
+          <div class="mock"><div class="mock-grid"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+        </article>
+
+        <article class="card tint-peach span2">
+          <div class="ico"><svg class="ic"><use href="#i-widget"/></svg></div>
+          <h3>小组件</h3>
+          <p>时钟、电池、资源与温度，按需开启。</p>
+          <div class="mock"><div class="mock-widget"><span>电池健康</span><b>86%</b><div class="mock-bar"><i></i></div></div></div>
+        </article>
+
+        <article class="card tint-gray span2">
+          <div class="ico"><svg class="ic"><use href="#i-feather"/></svg></div>
+          <h3>轻量与稳定</h3>
+          <p>纯 Win32 绘制，空闲约 8 MB。</p>
+          <div class="mock">
+            <div class="mock-row"><b></b>无 Electron / .NET</div>
+            <div class="mock-row"><b></b>单文件，解压即用</div>
+            <div class="mock-row"><b></b>后台线程处理下载</div>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- 自动轮播 -->
+  <section style="padding-top:8px">
+    <div class="wrap">
+      <div class="sec-head"><div><span class="kicker">功能一览</span><h2 class="title">像系统原生一样顺手。</h2></div></div>
+      <div class="carousel" data-carousel>
+        <div class="slides">
+          <div class="slide">
+            <div class="txt">
+              <h3>Dock：靠近，就会放大</h3>
+              <p>图标按与指针的距离平滑放大，离开后回弹。运行中的应用下方有小圆点，拖拽即可排序。</p>
+              <ul><li>压缩飞入 / 快照神奇两种最小化动画</li><li>分隔线整理工作与娱乐</li><li>不透明度 0 时仍可点击</li></ul>
+            </div>
+            <div class="demo">
+              <div style="width:100%">
+                <div class="mock-dock" style="gap:8px"><i style="width:46px;height:46px;transform:translateY(-8px)"></i><i style="width:38px;height:38px"></i><i style="width:34px;height:34px"></i><i style="width:32px;height:32px"></i><i style="width:32px;height:32px"></i></div>
+                <div style="text-align:center;font-size:11px;color:var(--text-3);margin-top:10px">指针靠近时按距离放大</div>
+              </div>
+            </div>
+          </div>
+          <div class="slide">
+            <div class="txt">
+              <h3>控制中心：一屏开关</h3>
+              <p>网络、蓝牙、深色模式与定位四张卡片；左半点击进入系统设置，右侧箭头打开列表。</p>
+              <ul><li>音量绑定当前输出设备</li><li>内屏不支持硬件调光时自动软件调光</li><li>卡片可拖动排序、调整宽度</li></ul>
+            </div>
+            <div class="demo"><img src="assets/shots/控制中心.jpg" alt="控制中心" style="max-height:250px;border-radius:10px;border:1px solid var(--line)"></div>
+          </div>
+          <div class="slide">
+            <div class="txt">
+              <h3>启动台：找应用不用翻桌面</h3>
+              <p>宫格展示全部应用，支持搜索与网页搜索；图标可以用本地图片或链接替换。</p>
+              <ul><li>分类标签与分页</li><li>搜索引擎 Google / Bing / 百度等</li><li>批量图标与深色图标</li></ul>
+            </div>
+            <div class="demo"><img src="assets/shots/启动台.jpg" alt="启动台" style="max-height:250px;border-radius:10px;border:1px solid var(--line)"></div>
+          </div>
+          <div class="slide">
+            <div class="txt">
+              <h3>小组件：信息就在桌面</h3>
+              <p>时钟、通知、资源监视、电池健康与温度，可单独开关，关闭后不再绘制。</p>
+              <ul><li>电池容量 / 循环次数</li><li>CPU / 内存 / 磁盘 / 温度</li><li>点击展开二级面板</li></ul>
+            </div>
+            <div class="demo">
+              <div class="mock-widget" style="width:80%"><span>资源监视器</span><b>CPU 15%</b><div class="mock-bar"><i style="width:15%"></i></div><span style="display:block;margin-top:8px">温度 52 °C</span><div class="mock-bar"><i style="width:52%"></i></div></div>
+            </div>
+          </div>
+        </div>
+        <button class="navb prev" aria-label="上一张">‹</button>
+        <button class="navb next" aria-label="下一张">›</button>
+        <div class="dots"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 轻量 / macOS 对照 -->
+  <section>
+    <div class="wrap two-col" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div class="diagram">
+        <h3>为什么轻？</h3>
+        <p style="font-size:13px;color:var(--text-2);margin-bottom:14px">不打包浏览器内核，不启动后台服务；空闲时只保留一个渲染进程。</p>
+        <div class="bars">
+          <div class="bar-row"><span>MiniDock</span><div class="bar-track"><div class="bar-fill" style="width:8%"></div></div><b>~8 MB</b></div>
+          <div class="bar-row"><span>BitDock</span><div class="bar-track"><div class="bar-fill gray" style="width:55%"></div></div><b>40–80 MB</b></div>
+          <div class="bar-row"><span>MyDockFinder</span><div class="bar-track"><div class="bar-fill dark" style="width:78%"></div></div><b>80–150 MB</b></div>
+        </div>
+        <p style="font-size:11.5px;color:var(--text-3);margin-top:12px">数据为常见空闲占用，实际随系统与开启的小组件变化。</p>
+      </div>
+
+      <div class="diagram">
+        <h3>和 macOS Dock 像在哪？</h3>
+        <div class="anatomy">
+          <div class="dock-anat">
+            <div class="row"><i></i><i></i><i class="big"></i><i></i><i></i><i></i></div>
+            <div class="hint">放大 / 回弹 / 运行小圆点 / 分隔线 / 磨砂背景</div>
+          </div>
+          <div class="labels">
+            <div><b>放大：</b>按指针距离平滑缩放</div>
+            <div><b>回弹：</b>按下压缩，松开弹回</div>
+            <div><b>分组：</b>分隔线 + 应用组</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 开源优势 -->
+  <section style="padding-top:8px">
+    <div class="wrap">
+      <div class="diagram" style="display:grid;grid-template-columns:1.1fr .9fr;gap:22px;align-items:center">
+        <div>
+          <span class="kicker">开源</span>
+          <h3 style="font-size:22px;margin:8px 0 6px">代码公开，承诺可验证。</h3>
+          <p style="color:var(--text-2);font-size:14px">MiniDock 以 MIT 协议开源，C / Win32 / GDI+ 全部手写。没有隐藏的服务，没有遥测，也没有付费解锁。</p>
+          <div class="pwa-badges" style="margin-top:12px">
+            <span>MIT License</span><span>纯 Win32</span><span>无遥测</span><span>可自行编译</span>
+          </div>
+          <div class="row" style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+            <a class="btn btn-primary" href="https://github.com/wang01116/MiniDock" target="_blank" rel="noopener">查看源码</a>
+            <a class="btn btn-ghost" href="assets/pages/compare.html">同类对比</a>
+          </div>
+        </div>
+        <div class="mock" style="margin:0;background:rgba(15,23,42,.92);color:#c9d6ee;font-family:Consolas,monospace;font-size:12px;line-height:1.9;padding:16px">
+          <div><span style="color:#7dd3fc">$</span> gcc -Oz minidock.c</div>
+          <div><span style="color:#7dd3fc">$</span> windres res/app.rc</div>
+          <div><span style="color:#86efac">✓</span> single exe · no runtime</div>
+          <div><span style="color:#86efac">✓</span> ~497 KB / UPX ~230 KB</div>
+          <div><span style="color:#fca5a5">×</span> no Electron · no .NET</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section>
+    <div class="wrap">
+      <div class="sec-head"><div><span class="kicker">常见问题</span><h2 class="title">你可能想知道的。</h2></div></div>
+      <div class="faq">
+        <details open>
+          <summary>为什么不做“液态玻璃”那种复杂动效？</summary>
+          <div class="a">液态玻璃依赖实时模糊、折射与大量图层合成，在低配设备、远程桌面或缩放下容易掉帧，也会显著增加 GPU 与内存占用。MiniDock 选择更轻的渐变、磨砂与放大回弹，优先保证鼠标跟手和长时间稳定。</div>
+        </details>
+        <details>
+          <summary>和 macOS 的 Dock 有多像？</summary>
+          <div class="a">放大曲线、点击回弹、运行小圆点、分隔线、启动台宫格都按 macOS 的使用习惯设计；同时保留 Windows 需要的托盘、任务栏与多显示器逻辑。</div>
+        </details>
+        <details>
+          <summary>为什么免费？如何维护？</summary>
+          <div class="a">MiniDock 由独立开发者利用业余时间维护，MIT 开源，没有会员与付费功能。维护成本主要来自测试与适配，欢迎在 GitHub 提 Issue 或到 B 站反馈。</div>
+        </details>
+        <details>
+          <summary>会收集我的数据吗？</summary>
+          <div class="a">不会。没有账号、遥测或统计脚本；仅在检查更新和下载网页图标时访问网络。详见 <a href="assets/pages/terms.html" style="color:var(--primary)">条款与隐私</a>。</div>
+        </details>
+        <details>
+          <summary>点击微信 / QQ 图标窗口不能操作？</summary>
+          <div class="a">托盘应用必须由它自己的托盘图标唤醒。MiniDock 会优先点击托盘图标；未登录时直接打开登录页。请确认应用已登录且保留托盘图标。</div>
+        </details>
+        <details>
+          <summary>是否支持 Windows 10？</summary>
+          <div class="a">支持 Windows 10 / 11 64 位。部分新特性（如系统级录屏快捷键）取决于系统版本。</div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section style="padding-top:0">
+    <div class="wrap">
+      <div class="cta">
+        <div><h2>把 macOS 的手感带回 Windows。</h2><p>单文件绿色版，配置就在 exe 旁边，换电脑复制文件夹即可。</p></div>
+        <div class="row"><a class="btn btn-primary" href="assets/pages/download.html">立即下载 2.8.0</a><a class="btn btn-ghost" href="assets/pages/docs.html">阅读文档</a></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div>
+        <div class="foot-brand"><img src="assets/ico/logo-128.png" alt="MiniDock">MiniDock</div>
+        <p class="foot-desc">让 Windows 也有一条优雅的 Dock。由独立开发者维护，MIT 开源。</p>
+        <div class="socials">
+          <a class="social bili" href="https://space.bilibili.com/351718296" target="_blank" rel="noopener"><img src="assets/ico/bilibili.svg" alt="" width="16" height="16">B 站主页</a>
+          <a class="social gh" href="https://github.com/wang01116/MiniDock" target="_blank" rel="noopener"><img src="assets/ico/github.svg" alt="" width="16" height="16">GitHub</a>
+        </div>
+        <div class="foot-qr">
+          <img src="assets/ico/site-qr.png" alt="官网二维码">
+          <div>扫码在手机上访问官网<br>PWA · 响应式 · 深浅色自动切换</div>
+        </div>
+        <div class="pwa-badges"><span>PWA</span><span>响应式</span><span>深浅色</span></div>
+      </div>
+      <div class="foot-col"><b>产品</b><a href="assets/pages/download.html">下载</a><a href="assets/pages/download.html#history">更新日志</a><a href="assets/pages/docs.html">使用文档</a></div>
+      <div class="foot-col"><b>功能</b><a href="assets/pages/docs.html#dock">Dock</a><a href="assets/pages/docs.html#control-center">控制中心</a><a href="assets/pages/docs.html#launchpad">启动台</a><a href="assets/pages/docs.html#widgets">小组件</a></div>
+      <div class="foot-col"><b>资源</b><a href="assets/pages/docs.html">文档</a><a href="assets/pages/docs.html#hotkeys">快捷键</a><a href="assets/pages/docs.html#faq">常见问题</a><a href="assets/pages/compare.html">同类对比</a></div>
+      <div class="foot-col"><b>关于</b><a href="https://github.com/wang01116/MiniDock" target="_blank" rel="noopener">GitHub</a><a href="https://space.bilibili.com/351718296" target="_blank" rel="noopener">B 站</a><a href="assets/pages/about.html">关于作者</a><a href="assets/pages/terms.html">条款与隐私</a></div>
+    </div>
+    <div class="legal">
+      © <span data-year>2026</span> MiniDock · 独立开发者 Wangcy。MiniDock 为免费开源软件，按 MIT License 提供，不收取任何费用。<br>
+      <b>免责声明：</b>软件按“现状”提供，不附带任何明示或暗示担保；使用本软件造成的系统设置变更、数据损失或第三方软件冲突，由使用者自行承担。Windows 是 Microsoft Corporation 的商标，本项目与 Microsoft 无关联。<br>
+      <b>隐私说明：</b>MiniDock 不收集个人数据；仅在检查更新、下载网页图标时访问网络。<b>条款：</b>允许自由使用、修改与分发，保留版权与许可声明。
+    </div>
+  </div>
+</footer>
+
+<script>
+window.MD_DOWNLOAD_PAGE = 'assets/pages/download.html';
+</script>
+<script src="assets/site.js"></script>
+</body>
+</html>
