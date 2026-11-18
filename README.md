@@ -8,7 +8,7 @@
 
 <div align="center">
 
-<img src="assets/logo-128.png" width="96" alt="MiniDock" />
+<img src="assets/ico/logo-128.png" width="96" alt="MiniDock" />
 
 # MiniDock
 
@@ -27,11 +27,11 @@
 
 <!--<img width="80%" alt="MiniDock 通用配置" src="assets/image1.jpg">-->
 
-| ![1](assets/img/1.jpg) | ![2](assets/img/2.jpg) | 
+| ![](assets/shots/通用设置.jpg) | ![](assets/shots/启动台.jpg) | 
 | :---: | :---: |
-| Dock 与设置 | 起动台与搜索引擎 | 
-|![3](assets/img/3.jpg) | ![4](assets/img/4.jpg) |
-|弧形展开 | 神奇效果动画 |
+| Dock 设置 | 起动台与搜索引擎 | 
+|![](assets/shots/状态栏.jpg) | ![](assets/shots/控制中心.jpg) |
+|状态栏 | 控制中心 |
 
 </div>
 
