@@ -1,0 +1,16 @@
+{
+  "name": "MiniDock — Windows Dock",
+  "short_name": "MiniDock",
+  "description": "让 Windows 也有一条优雅的 Dock。",
+  "lang": "zh-CN",
+  "start_url": "../index.html",
+  "scope": "../",
+  "display": "standalone",
+  "background_color": "#f6f8fc",
+  "theme_color": "#f6f8fc",
+  "icons": [
+    { "src": "ico/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "ico/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "ico/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

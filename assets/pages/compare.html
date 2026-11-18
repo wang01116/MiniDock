@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>同类对比 — MiniDock</title>
+<meta name="description" content="MiniDock 与 BitDock、MyDockFinder、软媒桌面、Nexus Dock、Seelen UI、AirDeck 的全方位客观对比。">
+<link rel="icon" type="image/png" href="../ico/logo-128.png">
+<link rel="stylesheet" href="../site.css">
+</head>
+<body class="compare-page">
+<header class="nav">
+  <div class="nav-in">
+    <a class="brand" href="../../index.html"><img src="../ico/logo-128.png" alt="MiniDock"><span>MiniDock<small>COMPARE</small></span></a>
+    <nav class="nav-links">
+      <a href="../../index.html">官网</a><a href="docs.html">使用文档</a><a class="on" href="compare.html">对比</a><a href="download.html">下载</a>
+    </nav>
+    <div class="nav-act">
+      <button class="theme-btn" data-theme-toggle aria-label="切换深色/浅色"></button>
+      <a class="btn btn-soft" href="download.html">下载 2.8.0</a>
+      <button class="menu-btn" aria-label="菜单">☰</button>
+    </div>
+  </div>
+</header>
+
+<main class="cmp-page">
+  <section class="page-head wrap">
+    <h1>和同类工具，客观比一比。</h1>
+    <p>选一个你关心的对手，只看 MiniDock 与它的差异。绿色表示该项表现较好，橙色表示有限或需要取舍。每款软件都有擅长的地方。</p>
+  </section>
+
+  <section class="wrap" style="padding-top:0">
+    <div class="cmp-picker" id="cmpPicker">
+      <button data-cmp="ruanmei">软媒桌面（提取版）</button>
+      <button class="on" data-cmp="bitdock">BitDock</button>
+      <button data-cmp="airdeck">AirDeck</button>
+      <button data-cmp="mydock">MyDockFinder</button>
+      <button data-cmp="nexus">Nexus Dock</button>
+      <button data-cmp="seelen">Seelen UI</button>
+    </div>
+
+    <div class="matrix-wrap">
+      <table class="matrix cmp-table">
+        <thead><tr><th>维度</th><th class="us">MiniDock 2.8</th><th id="cmpName">BitDock</th></tr></thead>
+        <tbody id="cmpBody"></tbody>
+      </table>
+    </div>
+
+    <div class="cmp-summary" id="cmpSummary"></div>
+
+    <div class="notes">
+      <details open>
+        <summary><span>怎么看这张表</span><span>展开 / 收起</span></summary>
+        <div class="body">
+          <p>对比基于公开资料、官方页面与日常使用体验整理，具体版本与配置不同会有差异。颜色只表示在该维度的相对表现，不代表一款软件全面优于另一款。</p>
+          <p>每款软件都有 MiniDock 没有的能力：主题生态、完整桌面改造、成熟插件体系、长期社区积累等。这里把对方的优势也标成绿色，方便你按场景选择。</p>
+        </div>
+      </details>
+      <details>
+        <summary><span>MiniDock 适合谁</span><span>展开 / 收起</span></summary>
+        <div class="body">
+          <p>想要 macOS 风格的 Dock 与顶部状态栏，但不想安装几十 MB 运行时、不想让软件接管整个系统界面；需要控制中心、小组件、启动台与网页应用；重视低占用、便携与开源可改。</p>
+        </div>
+      </details>
+      <details>
+        <summary><span>什么情况下不建议用 MiniDock</span><span>展开 / 收起</span></summary>
+        <div class="body">
+          <p>需要整套 macOS 桌面改造（窗口控件、任务栏替换、字体渲染）；需要大量主题皮肤与插件；需要成熟的社区模板与一键美化包。这些场景 MyDockFinder、Seelen UI、BitDock 更合适。</p>
+        </div>
+      </details>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div>
+        <div class="foot-brand"><img src="../ico/logo-128.png" alt="MiniDock">MiniDock</div>
+        <p class="foot-desc">让 Windows 也有一条优雅的 Dock。由独立开发者维护，MIT 开源。</p>
+        <div class="socials">
+          <a class="social bili" href="https://space.bilibili.com/351718296" target="_blank" rel="noopener"><img src="../ico/bilibili.svg" alt="" width="16" height="16">B 站主页</a>
+          <a class="social gh" href="https://github.com/wang01116/MiniDock" target="_blank" rel="noopener"><img src="../ico/github.svg" alt="" width="16" height="16">GitHub</a>
+        </div>
+        <div class="foot-qr">
+          <img src="../ico/site-qr.png" alt="官网二维码">
+          <div>扫码在手机上访问官网<br>PWA · 响应式 · 深浅色自动切换</div>
+        </div>
+        <div class="pwa-badges"><span>PWA</span><span>响应式</span><span>深浅色</span></div>
+      </div>
+      <div class="foot-col"><b>产品</b><a href="download.html">下载</a><a href="download.html#history">更新日志</a><a href="docs.html">使用文档</a></div>
+      <div class="foot-col"><b>功能</b><a href="docs.html#dock">Dock</a><a href="docs.html#control-center">控制中心</a><a href="docs.html#launchpad">启动台</a><a href="docs.html#widgets">小组件</a></div>
+      <div class="foot-col"><b>资源</b><a href="docs.html">文档</a><a href="docs.html#hotkeys">快捷键</a><a href="docs.html#faq">常见问题</a><a href="compare.html">同类对比</a></div>
+      <div class="foot-col"><b>关于</b><a href="https://github.com/wang01116/MiniDock" target="_blank" rel="noopener">GitHub</a><a href="https://space.bilibili.com/351718296" target="_blank" rel="noopener">B 站</a><a href="about.html">关于作者</a><a href="terms.html">条款与隐私</a></div>
+    </div>
+    <div class="legal">
+      © <span data-year>2026</span> MiniDock · 独立开发者 Wangcy。MiniDock 为免费开源软件，按 MIT License 提供，不收取任何费用。<br>
+      <b>免责声明：</b>软件按“现状”提供，不附带任何明示或暗示担保；使用本软件造成的系统设置变更、数据损失或第三方软件冲突，由使用者自行承担。Windows 是 Microsoft Corporation 的商标，本项目与 Microsoft 无关联。<br>
+      <b>隐私说明：</b>MiniDock 不收集个人数据；仅在检查更新、下载网页图标时访问网络。<b>条款：</b>允许自由使用、修改与分发，保留版权与许可声明。
+    </div>
+  </div>
+</footer>
+
+<script src="../site.js"></script>
+<script>
+const ROWS = [
+  '架构 / 技术栈', '支持平台', '安装方式', '安装包体积', '空闲内存', '对系统的影响',
+  '开源 / 闭源', 'Dock 样式', '动画', '控制中心', '桌面小组件', '启动台',
+  '扩展 / 插件', '主题 / 皮肤', '设置项', '多显示器 / 高 DPI', '收费', '维护与更新',
+  '上手难度', '适合人群'
+];
+
+const MINE = [
+  'g:纯 C / Win32 / GDI+，单进程',
+  'g:Windows 10 / 11 64 位',
+  'g:单文件绿色版，免安装',
+  'g:约 497 KB，UPX 约 230 KB',
+  'g:约 4–9 MB',
+  'g:不修改系统文件',
+  'g:MIT 开源，可自行编译',
+  'g:macOS 风格，背景 / 圆角 / 透明度',
+  'g:放大回弹 + 两种最小化动画',
+  'g:内置，Wi‑Fi / 蓝牙二级菜单',
+  'g:时钟 / 通知 / 资源 / 电池 / 温度',
+  'g:宫格 + 分类 + 多搜索引擎',
+  'b:无插件体系，功能内置',
+  'm:内置样式 + 图标包',
+  'g:覆盖 Dock / 状态栏 / 图标 / 性能',
+  'g:支持多屏与 DPI 缩放',
+  'g:完全免费，无会员',
+  'm:独立开发者维护，更新看个人时间',
+  'g:解压即用',
+  'm:轻量 Dock + 状态栏用户'
+];
+
+const DATA = {
+  bitdock: { name: 'BitDock', vals: [
+    'm:闭源，具体技术栈未公开', 'g:Windows', 'm:安装包 + 运行库', 'b:数十 MB', 'm:约 40–80 MB',
+    'g:不修改系统文件', 'b:闭源', 'g:皮肤与样式非常丰富', 'g:动画预设与插件效果多',
+    'b:无原生控制中心', 'm:以 Dock 插件为主', 'm:插件实现', 'g:成熟的插件与主题生态',
+    'g:主题皮肤资源丰富', 'g:选项非常丰富', 'g:支持', 'g:免费（部分素材 / 捐赠）',
+    'g:长期维护，社区活跃', 'm:需要安装与配置，折腾成本较高', 'm:喜欢主题、皮肤与插件的用户'
+  ], pros: '皮肤、插件与动画预设更丰富，Dock 外观可玩性高，适合喜欢不断换风格的用户。', fit: '主题与插件折腾爱好者。' },
+
+  mydock: { name: 'MyDockFinder', vals: [
+    'b:闭源商业软件', 'g:Windows', 'm:安装 + 后台服务', 'b:数十 MB', 'b:约 80–150 MB',
+    'b:会接管部分系统界面', 'b:闭源', 'g:整套 macOS 视觉，完成度高', 'g:魔幻最小化等完整动画',
+    'm:部分控制能力', 'm:有限小组件', 'g:支持', 'g:主题与界面替换资源丰富',
+    'g:主题资源丰富', 'g:选项非常丰富', 'g:支持', 'b:付费（Steam / 买断）',
+    'g:商业软件，更新稳定', 'm:安装 + 逐项配置，学习成本较高', 'm:想要整套 macOS 改造的用户'
+  ], pros: '完整的 macOS 桌面模拟，窗口控件、任务栏与大量可调项，视觉统一度是强项。', fit: '愿意付费、想整体改造桌面的用户。' },
+
+  airdock: { name: 'AirDeck', vals: [
+    'b:闭源', 'g:Windows', 'm:安装包', 'g:体积较小', 'g:内存较低', 'g:一般不修改系统文件',
+    'b:闭源', 'm:偏 macOS 风格 Dock', 'm:基础动画', 'b:无控制中心', 'm:少量小工具',
+    'b:无启动台', 'b:扩展较少', 'm:样式简单', 'm:设置较简单', 'g:支持',
+    'g:免费', 'b:更新较少', 'g:容易上手', 'm:只需要简单 Dock 的用户'
+  ], pros: '轻量、简单，专注 Dock 本身，适合不想折腾的用户。', fit: '只需要 macOS 风格 Dock、不关心控制中心与小组件的用户。' },
+
+  ruanmei: { name: '软媒桌面（提取版）', vals: [
+    'b:闭源', 'g:Windows', 'm:绿色提取版 / 安装包', 'g:体积较小', 'g:内存较低',
+    'b:部分版本会修改系统或捆绑组件，来源需甄别', 'b:闭源', 'm:传统 Windows 风格 Dock',
+    'm:基础动画', 'b:无控制中心', 'm:天气等小工具', 'b:无启动台', 'b:插件少',
+    'm:样式简单', 'm:设置简单', 'g:支持', 'g:免费', 'b:更新较少，提取版来源需甄别',
+    'g:容易上手', 'm:只需要基础 Dock 的轻度用户'
+  ], pros: '体积小、上手简单，老牌国产桌面工具，适合只需要基础 Dock 的用户。', fit: '基础 Dock 需求、对动画与定制要求不高的用户。' },
+
+  nexus: { name: 'Nexus Dock', vals: [
+    'b:闭源（有免费版与付费版）', 'g:Windows', 'm:安装包', 'm:中等', 'm:约 30–60 MB',
+    'g:不修改系统文件', 'b:闭源', 'g:经典 Dock 皮肤较多', 'g:多种动画与过渡',
+    'b:无控制中心', 'm:基础小工具', 'b:无启动台', 'g:皮肤与插件较多', 'g:皮肤资源成熟',
+    'g:设置丰富', 'g:支持', 'm:免费版 + 付费 Pro', 'm:维护节奏较慢', 'm:中等',
+    'm:喜欢经典 Dock 与皮肤的用户'
+  ], pros: '老牌 Dock 工具，皮肤与停靠栏样式成熟，稳定性经过长期验证。', fit: '偏好传统 Dock 风格、需要成熟皮肤库的用户。' },
+
+  seelen: { name: 'Seelen UI', vals: [
+    'm:开源，Rust / Web 技术栈（以项目为准）', 'g:Windows', 'm:安装 + 后台服务', 'm:中等',
+    'b:约 100 MB 以上', 'b:会接管任务栏与部分系统界面', 'g:开源', 'g:现代 Windows 改造风格',
+    'g:较流畅的任务栏与窗口动画', 'g:有', 'g:有', 'g:有', 'g:模块与主题扩展',
+    'g:主题生态', 'g:选项丰富', 'g:支持', 'g:免费开源', 'g:社区活跃',
+    'm:需要配置，学习成本中等', 'm:想要现代化 Windows 改造的用户'
+  ], pros: '现代化任务栏与桌面改造，模块化和主题能力强，社区活跃。', fit: '愿意尝试新式 Windows 改造、需要任务栏替换的用户。' }
+};
+
+const picker = document.getElementById('cmpPicker');
+const body = document.getElementById('cmpBody');
+const nameEl = document.getElementById('cmpName');
+const sum = document.getElementById('cmpSummary');
+
+const cell = v => {
+  const c = v.slice(0, 2), t = v.slice(2);
+  const cls = c === 'g:' ? 'good' : c === 'm:' ? 'mid' : c === 'b:' ? 'bad' : '';
+  return { t, cls };
+};
+
+function render(key) {
+  const d = DATA[key];
+  nameEl.textContent = d.name;
+  body.innerHTML = ROWS.map((r, i) => {
+    const a = cell(MINE[i]), b = cell(d.vals[i] || '');
+    return `<tr><td>${r}</td><td class="${a.cls}">${a.t}</td><td class="${b.cls}">${b.t}</td></tr>`;
+  }).join('');
+  sum.innerHTML = `<div><b>${d.name} 的优势</b>${d.pros}</div>
+    <div><b>更适合</b>${d.fit}<br><b style="margin-top:8px">MiniDock 更适合</b>想要轻量 Dock + 状态栏 + 控制中心、重视资源占用与开源可改的用户。</div>`;
+}
+
+picker.addEventListener('click', e => {
+  const b = e.target.closest('button[data-cmp]');
+  if (!b) return;
+  picker.querySelectorAll('button').forEach(x => x.classList.remove('on'));
+  b.classList.add('on');
+  render(b.dataset.cmp);
+});
+render('bitdock');
+</script>
+</body>
+</html>

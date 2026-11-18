@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>下载 MiniDock 2.8.0</title>
+<meta name="description" content="下载 MiniDock 2.8.0：直接下载最新 Windows 版，或使用网盘。">
+<meta name="theme-color" content="#f6f8fc">
+<link rel="icon" type="image/png" href="../ico/logo-128.png">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="stylesheet" href="../site.css">
+</head>
+<body><svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></symbol>
+</defs></svg>
+<header class="nav">
+  <div class="nav-in">
+    <a class="brand" href="../../index.html"><img src="../ico/logo-128.png" alt="MiniDock"><span>MiniDock<small>DOWNLOAD</small></span></a>
+    <nav class="nav-links">
+      <a href="../../index.html">官网</a><a href="docs.html">使用文档</a><a href="compare.html">对比</a><a class="on" href="download.html">下载</a>
+    </nav>
+    <div class="nav-act">
+      <button class="theme-btn" data-theme-toggle aria-label="切换深色/浅色"></button>
+      <a class="btn btn-soft" href="#download">下载 2.8.0</a>
+      <button class="menu-btn" aria-label="菜单">☰</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="page-head wrap">
+    <h1>下载 MiniDock</h1>
+    <p>当前版本 <span id="latestVer">2.8.0</span> · 单文件绿色版 · Windows 10 / 11（64 位）。</p>
+  </section>
+
+  <section class="wrap" id="download" style="padding-top:0">
+    <div class="dl-hero dl-page-enter">
+      <h2>点击下载最新版</h2>
+      <p>按钮会解析 GitHub Releases 最新版本，下载 <code>MiniDock-版本号.exe</code>；UPX 版为 <code>MiniDock-版本号-UPX.zip</code>。解析失败会打开 Releases 页面。</p>
+      <button class="big-dl" data-download="normal">
+        <span class="spinner" aria-hidden="true"></span>
+        <span class="arrow">⬇</span>
+        Windows 版 · 直接下载
+      </button>
+      <div class="dl-links">
+        <a href="https://github.com/wang01116/MiniDock/releases/latest" target="_blank" rel="noopener">打不开？前往 Releases 页面</a>
+        <a href="#" data-download="upx">下载 UPX 压缩版</a>
+      </div>
+
+      <div class="mobile-note">
+        <b>移动端提示：</b>手机无法直接安装 .exe。请复制下载链接，到电脑浏览器打开。
+        <br><button class="btn btn-soft" data-copy-link>复制下载链接</button>
+      </div>
+
+      <div class="netdisk-mini">
+        网盘下载（替代方案）：<a href="https://pan.quark.cn/s/d0fc740de21a" target="_blank" rel="noopener">点击前往网盘</a>
+      </div>
+    </div>
+
+    <div class="req" style="margin-top:16px">
+      <div><b>系统</b>Windows 10 / 11，64 位</div>
+      <div><b>体积</b>常规版约 497 KB · UPX 版约 230 KB</div>
+      <div><b>依赖</b>无 .NET / Electron / VC++ 运行库</div>
+    </div>
+  </section>
+
+  <section class="wrap" style="padding-top:22px">
+    <div class="sec-head"><div><span class="kicker">安装步骤</span><h2 class="title">解压即用。</h2></div></div>
+    <div class="cards" style="grid-template-columns:repeat(3,1fr)">
+      <article class="card"><div class="ico">1</div><h3>下载并解压</h3><p>选择常规版或 UPX 版，解压到任意文件夹。</p></article>
+      <article class="card"><div class="ico">2</div><h3>双击运行</h3><p>首次启动生成 <code>MiniDock.ini</code> 与 <code>icons\</code>。</p></article>
+      <article class="card"><div class="ico">3</div><h3>右键定制</h3><p>添加应用、文件夹、网页应用，调整背景与动画。</p></article>
+    </div>
+  </section>
+
+  <section class="wrap" style="padding-top:8px" id="history">
+    <div class="sec-head"><div><span class="kicker">版本历史</span><h2 class="title">最近更新。</h2></div></div>
+    <div class="mini-compare">
+      <table class="matrix">
+        <thead><tr><th>版本</th><th>时间</th><th>主要内容</th></tr></thead>
+        <tbody>
+          <tr><td>2.8.0</td><td>2026-11</td><td>控制中心与图标改进、设置完善、稳定性与资源占用优化</td></tr>
+          <tr><td>2.7.7</td><td>2026-11</td><td>修复控制中心崩溃、Wi‑Fi / 蓝牙二级菜单、录屏入口、体积精简</td></tr>
+          <tr><td>2.7.6</td><td>2026-10</td><td>控制中心卡片自定义、排序与宽度</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div>
+        <div class="foot-brand"><img src="../ico/logo-128.png" alt="MiniDock">MiniDock</div>
+        <p class="foot-desc">让 Windows 也有一条优雅的 Dock。由独立开发者维护，MIT 开源。</p>
+        <div class="socials">
+          <a class="social bili" href="https://space.bilibili.com/351718296" target="_blank" rel="noopener"><img src="../ico/bilibili.svg" alt="" width="16" height="16">B 站主页</a>
+          <a class="social gh" href="https://github.com/wang01116/MiniDock" target="_blank" rel="noopener"><img src="../ico/github.svg" alt="" width="16" height="16">GitHub</a>
+        </div>
+        <div class="foot-qr">
+          <img src="../ico/site-qr.png" alt="官网二维码">
+          <div>扫码在手机上访问官网<br>PWA · 响应式 · 深浅色自动切换</div>
+        </div>
+        <div class="pwa-badges"><span>PWA</span><span>响应式</span><span>深浅色</span></div>
+      </div>
+      <div class="foot-col"><b>产品</b><a href="download.html">下载</a><a href="download.html#history">更新日志</a><a href="docs.html">使用文档</a></div>
+      <div class="foot-col"><b>功能</b><a href="docs.html#dock">Dock</a><a href="docs.html#control-center">控制中心</a><a href="docs.html#launchpad">启动台</a><a href="docs.html#widgets">小组件</a></div>
+      <div class="foot-col"><b>资源</b><a href="docs.html">文档</a><a href="docs.html#hotkeys">快捷键</a><a href="docs.html#faq">常见问题</a><a href="compare.html">同类对比</a></div>
+      <div class="foot-col"><b>关于</b><a href="https://github.com/wang01116/MiniDock" target="_blank" rel="noopener">GitHub</a><a href="https://space.bilibili.com/351718296" target="_blank" rel="noopener">B 站</a><a href="about.html">关于作者</a><a href="terms.html">条款与隐私</a></div>
+    </div>
+    <div class="legal">
+      © <span data-year>2026</span> MiniDock · 独立开发者 Wangcy。MiniDock 为免费开源软件，按 MIT License 提供，不收取任何费用。<br>
+      <b>免责声明：</b>软件按“现状”提供，不附带任何明示或暗示担保；使用本软件造成的系统设置变更、数据损失或第三方软件冲突，由使用者自行承担。Windows 是 Microsoft Corporation 的商标，本项目与 Microsoft 无关联。<br>
+      <b>隐私说明：</b>MiniDock 不收集个人数据；仅在检查更新、下载网页图标时访问网络。<b>条款：</b>允许自由使用、修改与分发，保留版权与许可声明。
+    </div>
+  </div>
+</footer>
+<script src="../site.js"></script>
+<script>
+  document.documentElement.dataset.page = 'download';
+</script>
+</body>
+</html>

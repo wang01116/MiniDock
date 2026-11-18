@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MiniDock 使用文档</title>
+<meta name="description" content="MiniDock 2.8.0 使用文档：Dock、控制中心、小组件、启动台、图标、应用组、性能与全部设置项。">
+<link rel="icon" type="image/png" href="../ico/logo-128.png">
+<link rel="stylesheet" href="../site.css">
+</head>
+<body class="docs-page"><svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></symbol>
+</defs></svg>
+<div class="progress" aria-hidden="true"></div>
+
+<header class="nav">
+  <div class="nav-in">
+    <a class="brand" href="../../index.html"><img src="../ico/logo-128.png" alt="MiniDock"><span>MiniDock<small>DOCS</small></span></a>
+    <nav class="nav-links">
+      <a href="../../index.html">官网</a>
+      <a class="on" href="docs.html">使用文档</a>
+      <a href="compare.html">对比</a>
+      <a href="download.html">下载</a>
+    </nav>
+    <div class="nav-act">
+      <a class="btn btn-soft" href="download.html">下载 2.8.0</a>
+      <button class="menu-btn" aria-label="菜单">☰</button>
+    </div>
+  </div>
+</header>
+
+<div class="docs-wrap">
+  <aside class="side">
+    <div class="search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg> <input type="search" placeholder="搜索文档…" aria-label="搜索"></div>
+
+    <b>开始</b>
+    <a href="#intro">MiniDock 是什么</a>
+    <a href="#install">安装与启动</a>
+    <a href="#update">更新与版本</a>
+
+    <b>Dock</b>
+    <a href="#dock">基础操作</a>
+    <a href="#dock-anim">交互与动画</a>
+    <a href="#app-group">应用组 <span class="tag">特色</span></a>
+    <a href="#launchpad">启动台 <span class="tag">特色</span></a>
+    <a href="#webapps">网页应用 <span class="tag">特色</span></a>
+
+    <b>外观</b>
+    <a href="#theme">个性化与背景</a>
+    <a href="#icon-dialog">设置图标 <span class="tag">特色</span></a>
+    <a href="#icon-batch">批量图标</a>
+    <a href="#dark-icons">深色图标 <span class="tag">特色</span></a>
+    <a href="#system-icons">系统图标</a>
+
+    <b>系统能力</b>
+    <a href="#statusbar">状态栏</a>
+    <a href="#widgets">小组件</a>
+    <a href="#control-center">控制中心 <span class="tag">特色</span></a>
+    <a href="#cc-custom">控制中心自定义</a>
+    <a href="#battery">电池与温度</a>
+
+    <b>设置</b>
+    <a href="#settings">设置总览</a>
+    <a href="#general">通用</a>
+    <a href="#position">位置与显示</a>
+    <a href="#performance">性能</a>
+    <a href="#menu">右键菜单</a>
+    <a href="#backup">配置与备份</a>
+    <a href="#about">关于</a>
+
+    <b>更多</b>
+    <a href="#hotkeys">快捷键</a>
+    <a href="#multi">多显示器</a>
+    <a href="#context-menu">右键与快捷操作</a>
+    <a href="#drag">拖拽与排列</a>
+    <a href="#hidpi">高 DPI 与 2x 图标</a>
+    <a href="#settings-detail">设置项速查</a>
+    <a href="#faq">常见问题</a>
+  </aside>
+
+  <main class="doc">
+    <h1>MiniDock 使用文档</h1>
+    <p class="sub">按设置选项卡组织，覆盖全部常用功能。适用于 2.8.0。</p>
+    <div class="meta"><span>2.8.0</span><span>更新于 2026-11</span></div>
+
+    <section id="intro">
+      <h2>MiniDock 是什么</h2>
+      <p>MiniDock 是纯 C / Win32 / GDI+ 手写的 Windows 桌面工具，把 macOS 风格的 Dock、顶部状态栏、控制中心与小组件放在同一个进程里。</p>
+      <ul>
+        <li><b>单文件</b>：一个 exe，无 .NET / Electron / VC++ 依赖。</li>
+        <li><b>便携</b>：配置 <code>MiniDock.ini</code> 与图标缓存都在程序目录。</li>
+        <li><b>可定制</b>：外观、动画、图标、控制中心、右键菜单均可调整。</li>
+        <li><b>开源</b>：MIT 协议，可自行编译。</li>
+      </ul>
+    </section>
+
+    <section id="install">
+      <h2>安装与启动</h2>
+      <ol>
+        <li>下载压缩包并解压到任意文件夹。</li>
+        <li>双击 <code>MiniDock-2.8.0.exe</code>。</li>
+        <li>首次运行生成 <code>MiniDock.ini</code> 与 <code>icons\</code>。</li>
+        <li>如需开机自启：设置 → 通用 → 开机自启动。</li>
+      </ol>
+      <div class="callout">卸载：退出 Dock 后删除文件夹；开启过自启的请先在设置里关闭。</div>
+    </section>
+
+    <section id="update">
+      <h2>更新与版本</h2>
+      <p>覆盖 exe 即可保留配置。升级前建议在「配置与备份」导出一次。</p>
+      <table>
+        <tr><th>版本</th><th>内容</th></tr>
+        <tr><td>2.8.0</td><td>交互与设置完善、控制中心与图标改进、稳定性与资源占用优化</td></tr>
+        <tr><td>2.7.7</td><td>控制中心崩溃修复、Wi‑Fi / 蓝牙二级菜单、录屏入口、体积精简</td></tr>
+      </table>
+    </section>
+
+    <section id="dock">
+      <h2>Dock 基础操作</h2>
+      <h3>添加与打开</h3>
+      <ul>
+        <li>右键 Dock →「添加应用 / 文件」「添加文件夹」「添加网页应用」。</li>
+        <li>左键启动；已运行应用再次点击在显示 / 最小化间切换。</li>
+        <li>把文件拖到图标上，用该应用打开。</li>
+      </ul>
+      <h3>排序与移除</h3>
+      <ul>
+        <li>按住图标拖动调整顺序，拖出 Dock 松手移除。</li>
+        <li>右键 →「从 Dock 移除」，不会删除源文件。</li>
+        <li>右键 →「在右侧添加分割线」，分组更清楚。</li>
+      </ul>
+      <h3>外观</h3>
+      <ul>
+        <li>设置 → 个性化：背景模式、颜色、圆角、内边距、不透明度。</li>
+        <li>不透明度 0 时背景隐藏，只剩图标，仍可点击。</li>
+      </ul>
+    </section>
+
+    <section id="dock-anim">
+      <h2>交互与动画</h2>
+      <table>
+        <tr><th>选项</th><th>说明</th></tr>
+        <tr><td>悬停放大</td><td>按距离平滑放大，可调强度与半径</td></tr>
+        <tr><td>悬停高光</td><td>图标下方的柔和高光</td></tr>
+        <tr><td>点击回弹</td><td>按下压缩、松开回弹</td></tr>
+        <tr><td>动画风格</td><td>压缩飞入 / 快照神奇</td></tr>
+        <tr><td>动画速度</td><td>低配机器可调快</td></tr>
+        <tr><td>显示模式</td><td>常驻 / 自动隐藏 / 智能隐藏</td></tr>
+      </table>
+      <img src="../shots/交互动效设置.jpg" alt="交互动效设置">
+    </section>
+
+    <section id="app-group">
+      <h2>应用组 <span class="badge">特色</span></h2>
+      <ol>
+        <li>把一个图标拖到另一个图标上，松手组成应用组。</li>
+        <li>点击组打开成员；组内继续拖动排序，拖出成员移出。</li>
+        <li>右键组可重命名、解散；可切换宽图标显示。</li>
+        <li>「临时周转组」重启后自动清空。</li>
+      </ol>
+    </section>
+
+    <section id="launchpad">
+      <h2>启动台 <span class="badge">特色</span></h2>
+      <p>启动台是 Dock 上的宫格图标，点击后展示全部应用。</p>
+      <ul>
+        <li>搜索框筛选应用，回车打开第一个结果。</li>
+        <li>搜索框可切换搜索引擎（Google / Bing / DuckDuckGo / 百度 / 搜狗 / 360）。</li>
+        <li>分类标签「全部 / 测试 / 系统 / 工具」与分页点。</li>
+        <li>设置中可调整布局、每行数量与启动台热键。</li>
+      </ul>
+      <img src="../shots/启动台.jpg" alt="启动台">
+    </section>
+
+    <section id="webapps">
+      <h2>网页应用 <span class="badge">特色</span></h2>
+      <ol>
+        <li>右键 →「添加网页应用」，填写网址与名称。</li>
+        <li>右键 →「以应用窗口打开」，使用独立窗口。</li>
+        <li>右键 →「选择打开的浏览器…」指定 Edge / Chrome / Firefox 或任意 exe。</li>
+      </ol>
+      <p>选择只作用于当前网页应用，不影响全局默认浏览器。</p>
+    </section>
+
+    <section id="theme">
+      <h2>个性化与背景</h2>
+      <table>
+        <tr><th>选项</th><th>说明</th></tr>
+        <tr><td>背景模式</td><td>纯色 / 渐变 / 磨砂（毛玻璃）</td></tr>
+        <tr><td>主色 / 副色</td><td>渐变起止色，可跟随系统强调色</td></tr>
+        <tr><td>圆角 / 内边距</td><td>Dock 形状与图标留白</td></tr>
+        <tr><td>不透明度</td><td>0 = 透明但可点击；100 = 不透明</td></tr>
+      </table>
+      <img src="../shots/个性化设置.jpg" alt="个性化设置">
+    </section>
+
+    <section id="icon-dialog">
+      <h2>设置图标 <span class="badge">特色</span></h2>
+      <p>右键任意图标 →「设置图标…」。</p>
+      <table>
+        <tr><th>选项</th><th>说明</th></tr>
+        <tr><td>本地图片</td><td>PNG / JPG / ICO / BMP / GIF</td></tr>
+        <tr><td>图片链接</td><td>http(s) 链接，确定时同步下载并缓存</td></tr>
+        <tr><td>适配方式</td><td>自动去透明边 / 完整保留 / 居中裁切</td></tr>
+        <tr><td>深色图标</td><td>单独指定，可跟随系统深浅色</td></tr>
+      </table>
+      <img src="../shots/设置图标.jpg" alt="设置图标">
+      <div class="callout warn">链接必须能直接访问图片，下载失败会弹出提示。</div>
+    </section>
+
+    <section id="icon-batch">
+      <h2>批量设置图标</h2>
+      <p>设置 → 图标自定义 → 从文件夹批量设置图标：选择文件夹，按应用名匹配，预览后应用；未匹配项会列出。</p>
+    </section>
+
+    <section id="dark-icons">
+      <h2>深色图标 <span class="badge">特色</span></h2>
+      <ul>
+        <li>为单个应用指定深色图标。</li>
+        <li>按名称批量匹配深色图标。</li>
+        <li>开启自动切换后，系统深浅色变化时自动换图。</li>
+      </ul>
+    </section>
+
+    <section id="system-icons">
+      <h2>系统图标</h2>
+      <p>设置 → 图标自定义 → 系统图标，可直接添加开始菜单、设置、资源管理器、回收站、控制面板、任务管理器等。</p>
+    </section>
+
+    <section id="statusbar">
+      <h2>状态栏</h2>
+      <p>状态栏与 Dock 同属一个进程，可在 设置 → 状态栏与小组件 中逐项开关。</p>
+      <table>
+        <tr><th>元素</th><th>说明</th></tr>
+        <tr><td>时间日期</td><td>格式可自定义，点击打开日历</td></tr>
+        <tr><td>资源监视</td><td>CPU / 内存，点击查看详情</td></tr>
+        <tr><td>控制中心</td><td>打开控制中心</td></tr>
+        <tr><td>通知</td><td>需要关注的应用</td></tr>
+        <tr><td>托盘 / 电量 / 输入法</td><td>系统状态入口</td></tr>
+      </table>
+    </section>
+
+    <section id="widgets">
+      <h2>小组件</h2>
+      <table>
+        <tr><th>小组件</th><th>功能</th></tr>
+        <tr><td>时间与日期</td><td>时钟、日历、农历</td></tr>
+        <tr><td>通知</td><td>汇总需要关注的应用</td></tr>
+        <tr><td>资源监视器</td><td>CPU、内存、磁盘、网络、温度</td></tr>
+        <tr><td>计时器 / 待办</td><td>番茄钟与简单待办</td></tr>
+        <tr><td>电池健康</td><td>设计容量、当前容量、循环次数</td></tr>
+        <tr><td>温度</td><td>CPU / 硬盘温度（视设备支持）</td></tr>
+      </table>
+      <img src="../shots/电池健康.jpg" alt="电池健康">
+    </section>
+
+    <section id="control-center">
+      <h2>控制中心 <span class="badge">特色</span></h2>
+      <table>
+        <tr><th>卡片</th><th>左半点击</th><th>右侧箭头</th></tr>
+        <tr><td>Wi‑Fi</td><td>打开系统 Wi‑Fi 设置</td><td>可用网络列表</td></tr>
+        <tr><td>蓝牙</td><td>打开系统蓝牙设置</td><td>已配对设备列表</td></tr>
+        <tr><td>深色模式</td><td>切换系统深浅色</td><td>—</td></tr>
+        <tr><td>定位</td><td>打开定位隐私设置</td><td>—</td></tr>
+      </table>
+      <p>音量绑默认输出设备；亮度优先 DDC/CI，内屏不支持时自动软件调光。</p>
+      <p>快捷开关：静音、免打扰、热点、触控板、截图、语音输入、飞行模式、多屏幕、录屏、录音、节能模式、系统设置。</p>
+      <img src="../shots/控制中心.jpg" alt="控制中心">
+    </section>
+
+    <section id="cc-custom">
+      <h2>控制中心自定义</h2>
+      <ol>
+        <li>打开控制中心，点击编辑按钮。</li>
+        <li>拖动卡片排序；「+」添加控制项。</li>
+        <li>右键卡片设置 1×1 / 1×2 / 1×4 宽度。</li>
+        <li>再次点击编辑退出。</li>
+      </ol>
+      <img src="../shots/控制中心自定义设置.jpg" alt="控制中心自定义">
+    </section>
+
+    <section id="battery">
+      <h2>电池与温度</h2>
+      <p>电池健康读取设计容量、满充容量与循环次数；温度读取 CPU / 硬盘传感器，部分设备或虚拟机不支持。</p>
+    </section>
+
+    <section id="settings">
+      <h2>设置总览</h2>
+      <table>
+        <tr><th>分类</th><th>包含</th></tr>
+        <tr><td>通用</td><td>开机自启、锁定位置、热键、更新、日志</td></tr>
+        <tr><td>个性化</td><td>背景与渐变、图标个性化、倒影</td></tr>
+        <tr><td>位置与显示</td><td>屏幕边缘、显示器、显示模式</td></tr>
+        <tr><td>交互动效</td><td>放大、回弹、动画风格、自动隐藏</td></tr>
+        <tr><td>状态栏与小组件</td><td>状态栏元素、小组件开关与布局</td></tr>
+        <tr><td>图标自定义</td><td>批量图标、系统图标、深色图标、网页打开方式</td></tr>
+        <tr><td>性能</td><td>低占用模式、帧率、缓存清理</td></tr>
+        <tr><td>右键菜单配置</td><td>逐项显示 / 隐藏</td></tr>
+        <tr><td>配置与备份</td><td>导出、导入、打开目录、重置</td></tr>
+        <tr><td>关于</td><td>版本、仓库、检查更新</td></tr>
+      </table>
+      <img src="../shots/通用设置.jpg" alt="通用设置">
+    </section>
+
+    <section id="general">
+      <h2>通用</h2>
+      <ul>
+        <li>开机自启动、锁定 Dock 位置、隐藏系统托盘图标。</li>
+        <li>全局快捷键，默认 <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>D</kbd>。</li>
+        <li>启动时检查更新；日志默认关闭。</li>
+      </ul>
+    </section>
+
+    <section id="position">
+      <h2>位置与显示</h2>
+      <ul>
+        <li>屏幕边缘：上 / 下 / 左 / 右。</li>
+        <li>多屏时指定 Dock 所在显示器。</li>
+        <li>显示模式：常驻 / 自动隐藏 / 智能隐藏。</li>
+        <li>边缘间距、图标大小与间距。</li>
+      </ul>
+    </section>
+
+    <section id="performance">
+      <h2>性能</h2>
+      <table>
+        <tr><th>选项</th><th>说明</th></tr>
+        <tr><td>低占用模式</td><td>降低刷新率与动画帧率</td></tr>
+        <tr><td>动画帧率</td><td>30 / 60 / 高刷</td></tr>
+        <tr><td>空闲内存回收</td><td>无操作后归还工作集</td></tr>
+        <tr><td>清理图标缓存</td><td>删除 icons 中下载的图标</td></tr>
+      </table>
+      <img src="../shots/性能设置.jpg" alt="性能设置">
+    </section>
+
+    <section id="menu">
+      <h2>右键菜单</h2>
+      <p>逐项控制 Dock 右键菜单：打开、重命名、设置图标、复制文件、添加分割线、新建应用组、任务管理器、Dock 设置、退出 Dock。</p>
+      <img src="../shots/右键菜单设置.jpg" alt="右键菜单设置">
+    </section>
+
+    <section id="backup">
+      <h2>配置与备份</h2>
+      <ul>
+        <li>导出 / 导入配置；打开配置目录；恢复默认（会先备份）。</li>
+        <li>便携使用：整个文件夹复制到 U 盘即可。</li>
+      </ul>
+    </section>
+
+    <section id="about">
+      <h2>关于</h2>
+      <p>查看版本、编译时间、仓库地址；检查更新与打开 GitHub Releases。</p>
+      <img src="../shots/关于设置.jpg" alt="关于">
+    </section>
+
+    <section id="hotkeys">
+      <h2>快捷键</h2>
+      <table>
+        <tr><th>功能</th><th>默认</th></tr>
+        <tr><td>召唤 / 隐藏 Dock</td><td><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>D</kbd></td></tr>
+        <tr><td>启动台</td><td><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Space</kbd></td></tr>
+        <tr><td>系统截图</td><td><kbd>Win</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd></td></tr>
+        <tr><td>系统录屏</td><td><kbd>Win</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd></td></tr>
+      </table>
+    </section>
+
+    <section id="multi">
+      <h2>多显示器</h2>
+      <ul>
+        <li>Dock 与状态栏可分别指定显示器。</li>
+        <li>显示器热插拔后自动回到主屏。</li>
+        <li>便携模式不写注册表（开机自启除外）。</li>
+      </ul>
+    </section>
+
+
+    <section id="context-menu">
+      <h2>右键菜单与快捷操作</h2>
+      <h3>Dock 空白处右键</h3>
+      <table>
+        <tr><th>菜单项</th><th>说明</th></tr>
+        <tr><td>添加应用 / 文件</td><td>选择 exe、快捷方式或任意文件</td></tr>
+        <tr><td>添加文件夹</td><td>文件夹可直接放到 Dock，支持弧形展开</td></tr>
+        <tr><td>添加网页应用</td><td>输入网址，生成独立窗口图标</td></tr>
+        <tr><td>新建应用组 / 临时组</td><td>应用组长期保存，临时组重启清空</td></tr>
+        <tr><td>添加分割线</td><td>分隔工作与娱乐图标</td></tr>
+        <tr><td>Dock 设置</td><td>打开完整设置窗口</td></tr>
+        <tr><td>退出 Dock</td><td>退出程序（不影响开机自启设置）</td></tr>
+      </table>
+      <h3>图标右键</h3>
+      <ul>
+        <li>打开 / 显示、关闭（退出此应用）。</li>
+        <li>以应用窗口打开（网页应用）。</li>
+        <li>选择打开的浏览器（网页应用）。</li>
+        <li>重命名、设置图标、在右侧添加分割线、从 Dock 移除。</li>
+      </ul>
+      <h3>状态栏右键</h3>
+      <ul>
+        <li>时间：打开日历；资源：查看详情；控制中心：打开面板。</li>
+        <li>托盘图标：打开 Windows 隐藏图标区。</li>
+        <li>空白处：快速进入状态栏设置。</li>
+      </ul>
+      <div class="callout">菜单项可在 设置 → 右键菜单配置 中逐项关闭。</div>
+    </section>
+
+    <section id="drag">
+      <h2>拖拽与排列</h2>
+      <ul>
+        <li>按住图标拖动排序；拖出 Dock 松手移除。</li>
+        <li>把文件拖到图标上，用该应用打开。</li>
+        <li>把图标拖到另一个图标上组成应用组；组内拖出可移出。</li>
+        <li>拖到「废纸篓」可删除文件（需在设置中启用）。</li>
+      </ul>
+    </section>
+
+    <section id="hidpi">
+      <h2>高 DPI 与 2 倍图标</h2>
+      <p>Windows 缩放 125% / 150% / 200% 时，MiniDock 会按 DPI 自动缩放 Dock、图标与文字。</p>
+      <ul>
+        <li>图标建议提供 2 倍尺寸（如显示 64px 时使用 128px 图片），在高分屏更清晰。</li>
+        <li>「设置图标」支持任意尺寸 PNG，程序会按适配方式缩放；建议正方形、透明背景。</li>
+        <li>多显示器缩放不同时，Dock 会跟随所在显示器的 DPI。</li>
+      </ul>
+      <div class="callout">若图标发虚，优先更换更大的源图，而不是放大低分辨率图片。</div>
+    </section>
+    <section id="settings-detail">
+      <h2>设置项速查</h2>
+      <table>
+        <tr><th>页面 / 选项</th><th>说明</th></tr>
+        <tr><td>通用 · 开机自启</td><td>写入当前用户启动项；移动文件夹后需重新开启</td></tr>
+        <tr><td>通用 · 锁定位置</td><td>防止拖动改变 Dock 所在边缘</td></tr>
+        <tr><td>通用 · 全局热键</td><td>召唤 / 隐藏 Dock，可改为不冲突的组合</td></tr>
+        <tr><td>个性化 · 背景模式</td><td>纯色 / 渐变 / 磨砂；磨砂依赖 DWM</td></tr>
+        <tr><td>个性化 · 圆角 / 内边距</td><td>控制 Dock 外形与图标留白</td></tr>
+        <tr><td>个性化 · 不透明度</td><td>0 为隐形但仍可点击，100 为不透明</td></tr>
+        <tr><td>图标个性化 · 圆角 / 间距</td><td>统一图标形状与排列密度</td></tr>
+        <tr><td>倒影 · 高度 / 透明度</td><td>Dock 下方倒影，关掉可减少高度</td></tr>
+        <tr><td>位置 · 屏幕边缘</td><td>上 / 下 / 左 / 右，竖屏自动调整</td></tr>
+        <tr><td>位置 · 显示器</td><td>多屏时指定 Dock 所在屏幕</td></tr>
+        <tr><td>显示模式</td><td>常驻 / 自动隐藏 / 智能隐藏</td></tr>
+        <tr><td>交互动效 · 放大半径</td><td>指针周围多少像素内的图标参与放大</td></tr>
+        <tr><td>交互动效 · 放大强度</td><td>最大放大到基准尺寸的多少倍</td></tr>
+        <tr><td>交互动效 · 回弹幅度</td><td>按下压缩与松开回弹的力度</td></tr>
+        <tr><td>交互动效 · 动画速度</td><td>整体动画时长，低配可调快</td></tr>
+        <tr><td>弧形展开 · 样式</td><td>扇形 / 网格 / 列表；限制最大数量</td></tr>
+        <tr><td>应用组 · 宽图标</td><td>组图标显示成员缩略图，可调列数</td></tr>
+        <tr><td>启动台 · 布局</td><td>大 / 小、每行数量、分页</td></tr>
+        <tr><td>启动台 · 引擎</td><td>勾选启用的搜索引擎与默认浏览器</td></tr>
+        <tr><td>启动台 · 热键</td><td>默认 Ctrl+Alt+Space</td></tr>
+        <tr><td>状态栏 · 高度 / 间距</td><td>顶部条高度与距屏幕边缘的距离</td></tr>
+        <tr><td>状态栏 · 悬浮 / 全屏隐藏</td><td>是否留出安全区、游戏时自动隐藏</td></tr>
+        <tr><td>小组件 · 开关</td><td>每个小组件独立开启，关闭后不绘制</td></tr>
+        <tr><td>控制中心 · 编辑</td><td>拖动排序、+ 添加、右键设宽度</td></tr>
+        <tr><td>控制中心 · 快捷开关</td><td>录屏 / 录音 / 节能 / 多屏等可增删</td></tr>
+        <tr><td>图标 · 适配方式</td><td>自动去边 / 完整保留 / 居中裁切</td></tr>
+        <tr><td>图标 · 深色模式</td><td>单独图片；可跟随系统深浅色切换</td></tr>
+        <tr><td>网页应用 · 浏览器</td><td>默认 / Edge / Chrome / Firefox / 自定义 exe</td></tr>
+        <tr><td>性能 · 低占用模式</td><td>降低刷新率与动画帧率</td></tr>
+        <tr><td>性能 · 空闲回收</td><td>无操作后归还工作集，降低内存</td></tr>
+        <tr><td>右键菜单 · 逐项开关</td><td>隐藏不用的菜单项，减少误操作</td></tr>
+        <tr><td>配置与备份 · 导出 / 导入</td><td>ini 与图标设置；重置前自动备份</td></tr>
+      </table>
+      <div class="callout">找不到某项设置时，先在文档左侧搜索关键词，或在 GitHub Issues 反馈。</div>
+    </section>
+
+    <section id="faq">
+      <h2>常见问题</h2>
+      <h3>微信 / QQ 点击后窗口不能操作？</h3>
+      <p>托盘应用必须由它自己的托盘图标唤醒。MiniDock 会优先点击托盘图标；未登录时直接打开登录页。</p>
+      <h3>设置图标后没生效？</h3>
+      <p>网络图片需可直接访问；本地建议正方形 PNG 512×512 以上；深色模式检查深色图标。</p>
+      <h3>温度显示不可用？</h3>
+      <p>部分设备不暴露温度传感器（虚拟机、部分台式机）。</p>
+      <h3>不透明度 0 时点不到？</h3>
+      <p>2.7.7 起已修复，透明状态仍保留可点击底板。</p>
+    </section>
+  </main>
+
+  <aside class="toc-right" aria-label="本页目录"></aside>
+</div>
+
+<button class="fab" aria-label="打开目录">☰</button>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div>
+        <div class="foot-brand"><img src="../ico/logo-128.png" alt="MiniDock">MiniDock</div>
+        <p class="foot-desc">让 Windows 也有一条优雅的 Dock。由独立开发者维护，MIT 开源。</p>
+        <div class="socials">
+          <a class="social bili" href="https://space.bilibili.com/351718296" target="_blank" rel="noopener"><img src="../ico/bilibili.svg" alt="" width="16" height="16">B 站主页</a>
+          <a class="social gh" href="https://github.com/wang01116/MiniDock" target="_blank" rel="noopener"><img src="../ico/github.svg" alt="" width="16" height="16">GitHub</a>
+        </div>
+        <div class="foot-qr">
+          <img src="../ico/site-qr.png" alt="官网二维码">
+          <div>扫码在手机上访问官网<br>PWA · 响应式 · 深浅色自动切换</div>
+        </div>
+        <div class="pwa-badges"><span>PWA</span><span>响应式</span><span>深浅色</span></div>
+      </div>
+      <div class="foot-col"><b>产品</b><a href="download.html">下载</a><a href="download.html#history">更新日志</a><a href="docs.html">使用文档</a></div>
+      <div class="foot-col"><b>功能</b><a href="docs.html#dock">Dock</a><a href="docs.html#control-center">控制中心</a><a href="docs.html#launchpad">启动台</a><a href="docs.html#widgets">小组件</a></div>
+      <div class="foot-col"><b>资源</b><a href="docs.html">文档</a><a href="docs.html#hotkeys">快捷键</a><a href="docs.html#faq">常见问题</a><a href="compare.html">同类对比</a></div>
+      <div class="foot-col"><b>关于</b><a href="https://github.com/wang01116/MiniDock" target="_blank" rel="noopener">GitHub</a><a href="https://space.bilibili.com/351718296" target="_blank" rel="noopener">B 站</a><a href="about.html">关于作者</a><a href="terms.html">条款与隐私</a></div>
+    </div>
+    <div class="legal">
+      © <span data-year>2026</span> MiniDock · 独立开发者 Wangcy。MiniDock 为免费开源软件，按 MIT License 提供，不收取任何费用。<br>
+      <b>免责声明：</b>软件按“现状”提供，不附带任何明示或暗示担保；使用本软件造成的系统设置变更、数据损失或第三方软件冲突，由使用者自行承担。Windows 是 Microsoft Corporation 的商标，本项目与 Microsoft 无关联。<br>
+      <b>隐私说明：</b>MiniDock 不收集个人数据；仅在检查更新、下载网页图标时访问网络。<b>条款：</b>允许自由使用、修改与分发，保留版权与许可声明。
+    </div>
+  </div>
+</footer>
+<script src="../site.js"></script>
+</body>
+</html>
