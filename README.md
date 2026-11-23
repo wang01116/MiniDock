@@ -14,7 +14,7 @@
 
 # MiniDock
 
-**一个约 400 KB 的 Windows Dock 与 macOS 式顶部状态栏**
+**一个约 600 KB 的 Windows Dock 与 macOS 式顶部状态栏**
 
 纯 C + Win32 + GDI+ 手写，无 Electron、无 .NET、无 VC++ 运行库，单文件免安装。
 
